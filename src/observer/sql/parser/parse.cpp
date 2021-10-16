@@ -201,9 +201,11 @@ void updates_destroy(Updates *updates) {
 
 void create_table_append_attribute(CreateTable *create_table, AttrInfo *attr_info) {
   create_table->attributes[create_table->attribute_count++] = *attr_info;
+  // printf("Hello!!!");
 }
 void create_table_init_name(CreateTable *create_table, const char *relation_name) {
   create_table->relation_name = strdup(relation_name);
+  // printf("world!!!");
 }
 void create_table_destroy(CreateTable *create_table) {
   for (size_t i = 0; i < create_table->attribute_count; i++) {

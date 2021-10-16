@@ -64,7 +64,6 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
 
   // 使用 table_name.table记录一个表的元数据
   // 判断表文件是否已经存在
-
   int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
   if (-1 == fd) {
     if (EEXIST == errno) {
@@ -109,6 +108,24 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
   base_dir_ = base_dir;
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
   return rc;
+}
+
+RC Table::drop(const char *path, const char *name, const char *base_dir) {
+  // 删除元数据
+  if (remove(path)) {
+    LOG_ERROR("Failed to remove meta file. filename=%s, errmsg=%s", path, strerror(errno));
+    return RC::IOERR;
+  }
+
+  // 删除数据文件
+  std::string data_file = std::string(base_dir) + "/" + name + TABLE_DATA_SUFFIX;
+  if (remove(data_file.c_str())) {
+    LOG_ERROR("Failed to remove data file. filename=%s, errmsg=%s", path, strerror(errno));
+    return RC::IOERR;
+  }
+
+  LOG_INFO("Successfully drop table %s:%s", base_dir, name);
+  return RC::SUCCESS;
 }
 
 RC Table::open(const char *meta_file, const char *base_dir) {
