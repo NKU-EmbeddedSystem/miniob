@@ -116,7 +116,8 @@ RC DefaultHandler::close_db(const char *dbname) {
   if (db == nullptr) {
     return RC::SCHEMA_DB_NOT_OPENED;
   }
-  return db->close_table()
+  return RC::GENERIC_ERROR;
+  // return db->close_table();
 }
 
 RC DefaultHandler::execute(const char *sql) {

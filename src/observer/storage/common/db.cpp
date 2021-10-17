@@ -71,7 +71,7 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo 
   return RC::SUCCESS;
 }
 
-RC Db::delete_record(const char* table_name,const char* current_trx, const char* current_db, size_t condition_num, Conditio *conditions, int &deleted_count){
+RC Db::delete_record(const char* table_name, const char* current_trx, const char* current_db, size_t condition_num, Condition *conditions, int &deleted_count){
   RC rc = RC::SUCCESS;
   if (opened_tables_.count(table_name) == 0){
     return RC::SCHEMA_TABLE_NOT_EXIST;

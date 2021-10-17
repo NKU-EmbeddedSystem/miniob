@@ -35,6 +35,8 @@ public:
 
   RC drop_table(const char *table_name);
 
+  RC delete_record(const char* table_name, const char* current_trx, const char* current_db, size_t condition_num, Condition *conditions, int &deleted_count);
+
   Table *find_table(const char *table_name) const;
 
   const char *name() const;
