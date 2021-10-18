@@ -54,15 +54,24 @@ void value_init_string(Value *value, const char *v) {
   value->data = strdup(v);
 }
 
-void value_init_date(Value *value, const char *v) {
+void value_init_date(Value *value, date_t v) {
   value->type = DATE;
-  value->data = strdup(v);
+  value->data = malloc(sizeof(v));
+  memcpy(value->data, &v, sizeof(v));
 }
 
-int value_validation(const Value *value) {
+int value_validation(Value *value) {
   switch (value->type) {
     case DATE: {
-      return DateValue::validate_data_format(reinterpret_cast<const char *>(value->data), nullptr);
+      tm t;
+      // date value rewrite
+      if (DateValue::validate_data_format(reinterpret_cast<const char *>(value->data), &t)) {
+        date_t* data_ptr = reinterpret_cast<date_t *>(value->data);
+        *data_ptr = DateValue::to_raw_data(&t);
+        return 1;
+      } else {
+        return 0;
+      }
     }
     default:
       return true;

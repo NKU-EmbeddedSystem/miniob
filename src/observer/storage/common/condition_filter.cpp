@@ -119,11 +119,27 @@ RC DefaultConditionFilter::init(Table &table, const Condition &condition)
   // 但是选手们还是要实现。这个功能在预选赛中会出现
   if (type_left != type_right) {
     if (left.is_attr != right.is_attr) {
+      ConDesc &attr_cond = left.is_attr ? left : right;
+      ConDesc &scalar_cond = left.is_attr ? right : left;
       AttrType attr_type = left.is_attr ? type_left : type_right;
       AttrType scalar_type = left.is_attr ? type_right : type_left;
+
+      // rewrite date value
       if (attr_type == DATE && scalar_type == CHARS) {
-        type_left = DATE;
-        goto match;
+        tm t;
+
+        // validate and rewrite scalar value
+        if (DateValue::validate_data_format(
+                static_cast<const char *>(scalar_cond.value), &t)) {
+          *reinterpret_cast<date_t *>(scalar_cond.value) = DateValue::to_raw_data(&t);
+
+          // for later init() parameter
+          type_left = DATE;
+
+          goto match;
+        } else {
+          return RC::INVALID_ARGUMENT;
+        }
       }
     }
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
@@ -169,19 +185,9 @@ bool DefaultConditionFilter::filter(const Record &rec) const
       cmp_result = (int)(left - right);
     } break;
     case DATE: {
-      int left_date_value[3], right_date_value[3];
-      if (!DateValue::validate_data_format(left_value, left_date_value)
-        || !DateValue::validate_data_format(right_value, right_date_value)) {
-        LOG_PANIC("invalid date format found: left=%s right=%s", left_value, right_value);
-        return false;
-      }
-      if (left_date_value[0] != right_date_value[0]) {
-        cmp_result = left_date_value[0] - right_date_value[0];
-      } else if (left_date_value[1] != right_date_value[1]) {
-        cmp_result = left_date_value[1] - right_date_value[1];
-      } else {
-        cmp_result = left_date_value[2] - right_date_value[2];
-      }
+      date_t left = *reinterpret_cast<date_t *>(left_value);
+      date_t right = *reinterpret_cast<date_t *>(right_value);
+      cmp_result = static_cast<int>(left - right);
     } break;
     default: {
     }

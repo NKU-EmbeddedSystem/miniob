@@ -298,8 +298,8 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
   const int normal_field_start_index = table_meta_.sys_field_num();
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
-    if (!type_match(field->type(), const_cast<Value *>(&value))) {
+    Value &value = const_cast<Value &>(values[i]);
+    if (!type_match(field->type(), &value)) {
         LOG_ERROR("Invalid value type. field name=%s, type=%d, but given=%d",
                   field->name(), field->type(), value.type);
         return RC::SCHEMA_FIELD_TYPE_MISMATCH;
@@ -630,7 +630,7 @@ RC Table::update_record(Trx *trx, ConditionFilter *filter, const char *attribute
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
-  if (!value_validation(value)) {
+  if (!value_validation(const_cast<Value *>(value))) {
     return RC::INVALID_ARGUMENT;
   }
 

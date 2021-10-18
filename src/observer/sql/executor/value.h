@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include <ostream>
 #include <iomanip>
 #include <sstream>
+#include <ctime>
 
 class TupleValue {
 public:
@@ -101,52 +102,28 @@ private:
   std::string value_;
 };
 
+typedef unsigned int date_t;
+
 class DateValue : public TupleValue {
 public:
 
   /**
    * construct a DateValue
    * should first invoke validation, this will also construct a date_data parameter
-   * @param date_data [0] = year, [1] = month, [2] = day
+   * @param value days since 1970.01.01
    */
-  explicit DateValue(const int date_data[3]) {
-    year = date_data[0];
-    month = date_data[1];
-    day = date_data[2];
-  }
+  explicit DateValue(date_t value)
+    : value(value) {
+      init_str(value);
+    }
 
   void to_string(std::ostream &os) const override {
-    if (year < 1000) {
-      os << '0';
-      if (year < 100) {
-        os << '0';
-        if (year < 10) {
-          os << '0';
-        }
-      }
-    }
-    os << year << '-';
-
-    if (month < 10) {
-      os << '0';
-    }
-    os << month << '-';
-
-    if (day < 10) {
-      os << '0';
-    }
-    os << day;
+    os << str;
   }
 
   int compare(const TupleValue &other) const override {
-    const DateValue &date_value = static_cast<const DateValue &>(other);
-    if (year != date_value.year) {
-      return year - date_value.year;
-    } else if (month != date_value.month) {
-      return month - date_value.month;
-    } else {
-      return day - date_value.day;
-    }
+    const auto &date_value = static_cast<const DateValue &>(other);
+    return static_cast<int>(value - date_value.value);
   }
 
   /**
@@ -154,90 +131,19 @@ public:
    * Since the validation involves a transformation, resulted Y-M-D
    * may be required or not, which is used to construct d DateValue.
    * @param value date string to validate
-   * @param date_data resulted Y-M-D. set nullptr if not to construct a DateValue instance
+   * @param t out tm result. set nullptr if not to construct a DateValue instance
    * @return whether the date string is legal
    */
-  static bool validate_data_format(const char *value, int date_data[3]) {
-    // dump parameter if the resulted Y-M-D is not required
-    int tmp[3];
-    return transform(value, (date_data == nullptr) ? tmp : date_data);
-  }
+  static bool validate_data_format(const char *value, tm *t);
+
+  static date_t to_raw_data(tm *t);
+  static void from_raw_data(date_t days, tm *t);
 
 private:
-  static bool transform(const char *value, int date_data[3]) {
-    if (value == nullptr) {
-      return false;
-    }
+  void init_str(date_t days);
 
-    int start = 0, end = 0;
-    for (int i = 0; i < 2; i++) {
-      // find next '-' or '\0'
-      while (value[end] != '-' && value[end] != '\0') {
-        end++;
-      }
-
-      // first two int shouldn't end with '\0'
-      if (end == '\0') {
-        return false;
-      }
-
-      // transform to int
-      if (!str2int(value, start, end, &date_data[i])) {
-        return false;
-      }
-
-      start = ++end;
-    }
-
-    while (value[end] != '\0') {
-      end++;
-    }
-
-    if (!str2int(value, start, end, &date_data[2])) {
-      return false;
-    }
-
-    // got date_data[year, month, day]
-    // now validate
-    if (date_data[0] > 2038
-        || date_data[1] > 12
-        || date_data[2] > 31
-        || date_data[0] == 0
-        || date_data[1] == 0
-        || date_data[2] == 0) {
-      return false;
-    }
-
-    return true;
-  }
-
-  static bool str2int(const char *value, int start, int end, int *date_data) {
-    // empty string
-    if (start == end) {
-      return false;
-    }
-
-    int num = 0;
-    char digit;
-    while (start != end) {
-      digit = value[start++];
-
-      // check digit char
-      if (digit < '0' || digit > '9') {
-        return false;
-      }
-
-      num *= 10;
-      num += (digit - '0');
-    }
-
-    *date_data = num;
-    return true;
-  }
-
-  int year;
-  int month;
-  int day;
+  date_t value;
+  char str[12];
 };
 
 #endif //__OBSERVER_SQL_EXECUTOR_VALUE_H_
