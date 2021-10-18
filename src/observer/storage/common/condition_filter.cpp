@@ -182,7 +182,12 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     case FLOATS: {
       float left = *(float *)left_value;
       float right = *(float *)right_value;
-      cmp_result = (int)(left - right);
+      auto fcmp = left -right;
+      if (fcmp == 0) {
+        cmp_result = 0;
+      } else {
+        cmp_result = (fcmp > 0) ? 1 : -1;
+      }
     } break;
     case DATE: {
       date_t left = *reinterpret_cast<date_t *>(left_value);

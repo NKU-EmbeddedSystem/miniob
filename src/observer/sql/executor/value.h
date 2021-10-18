@@ -142,6 +142,9 @@ public:
 private:
   void init_str(date_t days);
 
+  static bool check_date_manually(const tm *t);
+  static bool check_date_with_syscall(const tm *t);
+
   date_t value;
   char str[12];
 };
