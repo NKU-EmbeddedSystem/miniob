@@ -39,7 +39,7 @@ public:
   void add(int value);
   void add(float value);
   void add(const char *s, int len);
-  void add(int date_data[3]);
+  void add(date_t value);
   void pop_back();
 
   const std::vector<std::shared_ptr<TupleValue>> &values() const {

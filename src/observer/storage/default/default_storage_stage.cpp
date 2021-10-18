@@ -344,7 +344,18 @@ RC insert_record_from_file(Table *table, std::vector<std::string> &file_values,
       }
       break;
       case DATE: {
-        value_init_date(&record_values[i], file_value.c_str());
+        deserialize_stream.clear();
+        deserialize_stream.str(file_value);
+
+        date_t date_value;
+        deserialize_stream >> date_value;
+        if (!deserialize_stream || !deserialize_stream.eof()) {
+          errmsg << "need a date but got '" << file_values[i]
+                 << "'(field index:" << i << ")";
+          rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        } else {
+          value_init_date(&record_values[i], date_value);
+        }
       }
       break;
       default: {

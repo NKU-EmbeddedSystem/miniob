@@ -173,6 +173,8 @@ typedef struct Query {
   union Queries sstr;
 } Query;
 
+typedef unsigned int date_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
@@ -183,8 +185,8 @@ void relation_attr_destroy(RelAttr *relation_attr);
 void value_init_integer(Value *value, int v);
 void value_init_float(Value *value, float v);
 void value_init_string(Value *value, const char *v);
-void value_init_date(Value *value, const char *v);
-int value_validation(const Value *value);
+void value_init_date(Value *value, date_t v);
+int value_validation(Value *value);
 void value_destroy(Value *value);
 
 void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
