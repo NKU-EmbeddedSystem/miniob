@@ -19,9 +19,45 @@ bool DateValue::validate_data_format(const char *value, tm *t) {
   memset(tptr, 0, sizeof(tm));
 
   return strptime(value, "%Y-%m-%d", tptr) != nullptr
-         && tptr->tm_year >= 70;
+         && check_date_manually(tptr);
 }
 
+static bool big_month[12] = {
+        true, false, true, false,
+        true, false, true, true,
+        false, true, false, true
+};
+
+bool DateValue::check_date_manually(const tm *t) {
+  int year = t->tm_year + 1900;
+  int month = t->tm_mon;
+  int day = t->tm_mday;
+
+  // only permit 1970 later
+  if (year < 1970) {
+    return false;
+  }
+
+  if (!big_month[month]) {
+    // normal small month
+    if (month != 1) {
+      return day <= 30;
+    } else { // lunar check
+      bool lunar = ((year % 4) == 0);
+      return lunar
+            ? (day <= 29)
+            : (day <= 28);
+    }
+  }
+}
+
+bool DateValue::check_date_with_syscall(const tm *t) {
+  tm t_clone = *t;
+  time_t time = mktime(&t_clone);
+  time += (8 * 3600);
+  gmtime_r(&time, &t_clone);
+  return t->tm_mon == t_clone.tm_mon && t->tm_mday == t_clone.tm_mday;
+}
 date_t DateValue::to_raw_data(tm *t) {
   time_t time = mktime(t);
 

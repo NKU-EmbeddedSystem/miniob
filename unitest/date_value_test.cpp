@@ -52,34 +52,6 @@ TEST(dateTest, invalidTests) {
 #include <ctime>
 
 int main(int argc, char **argv) {
-//  auto dstr = "1970-02-30";
-//  tm t;
-//
-//  memset(&t, 0, sizeof(t));
-//  auto ret = strptime(dstr, "%Y-%m-%d", &t);
-//  printf("ret: %p\n", ret);
-//  printf("%d %d %d\n", t.tm_year, t.tm_mon, t.tm_mday);
-//
-//  time_t time = mktime(&t);
-//  time /= 3600;
-//  time += 8;
-//  time /= 24;
-//  printf("%ld\n", time);
-//
-//  time *= (24 * 3600);
-//  tm *gmt = gmtime(&time);
-//  tm *localt = localtime(&time);
-//
-//  printf("gmt: %d %d %d\n", gmt->tm_year, gmt->tm_mon, gmt->tm_mday);
-//  printf("localt: %d %d %d\n", localt->tm_year, localt->tm_mon, localt->tm_mday);
-//
-//  char buff[12];
-//  auto r = strftime(buff, 12, "%Y-%m-%d\n", gmt);
-//  printf("%s", buff);
-//
-//  r = strftime(buff, 12, "%Y-%m-%d\n", localt);
-//  printf("%s", buff);
-
   // 分析gtest程序的命令行参数
   testing::InitGoogleTest(&argc, argv);
 
