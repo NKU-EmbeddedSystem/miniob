@@ -536,8 +536,78 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   return rc;
 }
 
-RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num, const Condition conditions[], int *updated_count) {
-  return RC::GENERIC_ERROR;
+class RecordUpdater {
+public:
+    RecordUpdater(Table *table, Trx *trx, const char *attribute_name, const Value *value)
+      : table_(table), trx_(trx), attribute_name_(attribute_name), value_(value), updated_count_(0)
+      { }
+
+    RC update(Record *record) {
+      printf("Updated Record Id: pageNo %d, slotNo %d\n", record->rid.page_num, record->rid.slot_num);
+      // prepare record to commit to update
+      RC rc = make_record(record);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+
+      // perform update
+      rc = table_->update_record(trx_, record);
+      if (rc == RC::SUCCESS) {
+        updated_count_++;
+      }
+
+      return rc;
+    }
+
+    int update_count() {
+      return updated_count_;
+    }
+
+
+private:
+    RC make_record(Record *record) {
+      const FieldMeta *field_meta = table_->table_meta().field(attribute_name_);
+      if (field_meta == nullptr) {
+        return RC::INVALID_ARGUMENT;
+      }
+      memcpy(record->data + field_meta->offset(), value_->data, field_meta->len());
+      return RC::SUCCESS;
+    }
+
+    Table *table_;
+    Trx *trx_;
+    const char *attribute_name_;
+    const Value *value_;
+    int updated_count_;
+};
+
+static RC record_reader_update_adapter(Record *record, void *context) {
+  return reinterpret_cast<RecordUpdater *>(context)->update(record);
+}
+
+RC Table::update_record(Trx *trx, Record *record) {
+  RC rc;
+
+  rc = record_handler_->update_record(record);
+  // TODO: trx used correctly?
+  if (rc == RC::SUCCESS) {
+    if (trx != nullptr) {
+      rc = trx->update_record(this, record);
+    }
+  }
+
+  return rc;
+}
+
+RC Table::update_record(Trx *trx, ConditionFilter *filter, const char *attribute_name, const Value *value, int *updated_count) {
+  RecordUpdater updater(this, trx , attribute_name, value);
+
+  RC rc = scan_record(trx, filter, -1, &updater, record_reader_update_adapter);
+  if (updated_count != nullptr) {
+    *updated_count = updater.update_count();
+  }
+
+  return rc;
 }
 
 class RecordDeleter {
@@ -624,6 +694,16 @@ RC Table::rollback_delete(Trx *trx, const RID &rid) {
   }
 
   return trx->rollback_delete(this, record); // update record in place
+}
+
+RC Table::commit_update(Trx *trx, const RID &rid) {
+  Record record;
+  RC rc = record_handler_->get_record(&rid, &record);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  return trx->commit_update(this, record);
 }
 
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid) {
