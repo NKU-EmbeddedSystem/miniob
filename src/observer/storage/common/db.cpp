@@ -53,8 +53,15 @@ RC Db::init(const char *name, const char *dbpath) {
 
 RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo *attributes) {
   RC rc = RC::SUCCESS;
-  // check table_name
+  //check table_name
   if (opened_tables_.count(table_name) != 0) {
+    return RC::SCHEMA_TABLE_EXIST;
+  }
+
+  //在建表之前先判断表名是否已经存在 
+  //如果查到已经存在 返回错误
+  if(rc == query_tablename(table_name)){
+    //printf("query_tablename!");
     return RC::SCHEMA_TABLE_EXIST;
   }
 
@@ -178,4 +185,15 @@ RC Db::sync() {
   }
   LOG_INFO("Sync db over. db=%s", name_.c_str());
   return rc;
+}
+
+RC Db::query_tablename(const char *table_name){
+  Table *table = find_table(table_name);
+  if (table != nullptr) {
+    LOG_INFO("The table %s is already exist. db=%s",table_name);
+    printf("The table %s is already exist. db=%s",table_name);
+    return RC::SUCCESS;
+  }
+  printf("The table %s is not exist. db=%s",table_name);
+  return RC::GENERIC_ERROR;
 }
