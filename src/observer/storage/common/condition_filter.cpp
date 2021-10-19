@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "record_manager.h"
 #include "common/log/log.h"
 #include "storage/common/table.h"
+#include "sql/executor/value.h"
 
 using namespace common;
 
@@ -117,9 +118,18 @@ RC DefaultConditionFilter::init(Table &table, const Condition &condition)
   // NOTE：这里没有实现不同类型的数据比较，比如整数跟浮点数之间的对比
   // 但是选手们还是要实现。这个功能在预选赛中会出现
   if (type_left != type_right) {
+    if (left.is_attr != right.is_attr) {
+      AttrType attr_type = left.is_attr ? type_left : type_right;
+      AttrType scalar_type = left.is_attr ? type_right : type_left;
+      if (attr_type == DATE && scalar_type == CHARS) {
+        type_left = DATE;
+        goto match;
+      }
+    }
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
+match:
   return init(left, right, type_left, condition.comp);
 }
 
@@ -157,6 +167,21 @@ bool DefaultConditionFilter::filter(const Record &rec) const
       float left = *(float *)left_value;
       float right = *(float *)right_value;
       cmp_result = (int)(left - right);
+    } break;
+    case DATE: {
+      int left_date_value[3], right_date_value[3];
+      if (!DateValue::validate_data_format(left_value, left_date_value)
+        || !DateValue::validate_data_format(right_value, right_date_value)) {
+        LOG_PANIC("invalid date format found: left=%s right=%s", left_value, right_value);
+        return false;
+      }
+      if (left_date_value[0] != right_date_value[0]) {
+        cmp_result = left_date_value[0] - right_date_value[0];
+      } else if (left_date_value[1] != right_date_value[1]) {
+        cmp_result = left_date_value[1] - right_date_value[1];
+      } else {
+        cmp_result = left_date_value[2] - right_date_value[2];
+      }
     } break;
     default: {
     }
