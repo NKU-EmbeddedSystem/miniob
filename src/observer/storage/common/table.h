@@ -66,6 +66,14 @@ public:
 
   RC create_index(Trx *trx, const char *index_name, const char *attribute_name);
 
+ /**
+   * 查询表中是否有需要更新、删除、查询的属性
+   * @param path 元数据保存的文件(完整路径)
+   * @param name 表名
+   * @param base_dir 表数据存放的路径
+   */
+  RC query_attributename(const char *attribute_name);
+  
 public:
   const char *name() const;
 

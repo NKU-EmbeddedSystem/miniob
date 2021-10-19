@@ -37,6 +37,12 @@ public:
 
   RC delete_record(const char* table_name, const char* current_trx, const char* current_db, size_t condition_num, Condition *conditions, int &deleted_count);
 
+  /**
+   * 找到某个表 找到则成功 找不到返回失败
+   * @param table_name 要创建的表的名字
+   */
+  RC query_tablename(const char *table_name);
+
   Table *find_table(const char *table_name) const;
 
   const char *name() const;

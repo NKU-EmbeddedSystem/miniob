@@ -28,6 +28,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/bplus_tree_index.h"
 #include "storage/trx/trx.h"
 
+
+
 Table::Table() : 
     data_buffer_pool_(nullptr),
     file_id_(-1),
@@ -171,6 +173,16 @@ RC Table::open(const char *meta_file, const char *base_dir) {
   }
   return rc;
 }
+
+RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num, const Condition conditions[], int *updated_count){
+  RC rc=query_attributename(attribute_name);
+  if(rc != RC::SUCCESS){
+    printf("The attribute %s is not exist!",attribute_name);
+    return rc;
+  }
+  return RC::SUCCESS;
+}
+
 
 RC Table::commit_insert(Trx *trx, const RID &rid) {
   Record record;
@@ -536,10 +548,6 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
   return rc;
 }
 
-RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num, const Condition conditions[], int *updated_count) {
-  return RC::GENERIC_ERROR;
-}
-
 class RecordDeleter {
 public:
   RecordDeleter(Table &table, Trx *trx) : table_(table), trx_(trx) {
@@ -735,3 +743,19 @@ RC Table::sync() {
   LOG_INFO("Sync table over. table=%s", name());
   return rc;
 }
+
+/* struct _AttrInfo {
+  char *attrName;    // Attribute name
+  AttrType attrType; // Type of attribute
+  int attrLength;    // Length of attribute
+};
+   */
+RC Table::query_attributename(const char *attribute_name){
+  if(nullptr == table_meta().field(attribute_name)){
+    printf("This attribute is not exsit!");
+    return RC::INVALID_ARGUMENT;
+  }
+  printf("This attribute is already exsit!");
+  return RC::SUCCESS;
+}
+
