@@ -272,6 +272,23 @@ const TableMeta &Table::table_meta() const {
   return table_meta_;
 }
 
+// date string will be recognized as CHARS type
+// during parsing, so we may have to rewrite
+// type here
+static bool type_match(AttrType field_type, Value *value) {
+  if (field_type == value->type) {
+    return true;
+  }
+
+  // type rewrite
+  if (field_type == DATE && value->type == CHARS) {
+    value->type = DATE;
+    return true;
+  }
+
+  return false;
+}
+
 RC Table::make_record(int value_num, const Value *values, char * &record_out) {
   // 检查字段类型是否一致
   if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
@@ -282,10 +299,15 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
-    if (field->type() != value.type) {
-      LOG_ERROR("Invalid value type. field name=%s, type=%d, but given=%d",
-        field->name(), field->type(), value.type);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    if (!type_match(field->type(), const_cast<Value *>(&value))) {
+        LOG_ERROR("Invalid value type. field name=%s, type=%d, but given=%d",
+                  field->name(), field->type(), value.type);
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+
+    // validate value
+    if (!value_validation(&value)) {
+      return RC::INVALID_ARGUMENT;
     }
   }
 
@@ -600,6 +622,19 @@ RC Table::update_record(Trx *trx, Record *record) {
 }
 
 RC Table::update_record(Trx *trx, ConditionFilter *filter, const char *attribute_name, const Value *value, int *updated_count) {
+  // sanity check
+  const FieldMeta *field = table_meta_.field(attribute_name);
+  if (!type_match(field->type(), const_cast<Value *>(value))) {
+    LOG_ERROR("Invalid value type. field name=%s, type=%d, but given=%d",
+              field->name(), field->type(), value->type);
+    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  }
+
+  if (!value_validation(value)) {
+    return RC::INVALID_ARGUMENT;
+  }
+
+  // real update
   RecordUpdater updater(this, trx , attribute_name, value);
 
   RC rc = scan_record(trx, filter, -1, &updater, record_reader_update_adapter);
