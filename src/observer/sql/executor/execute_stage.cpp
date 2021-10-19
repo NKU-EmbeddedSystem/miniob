@@ -124,8 +124,13 @@ void ExecuteStage::handle_request(common::StageEvent *event) {
 
   switch (sql->flag) {
     case SCF_SELECT: { // select
-      do_select(current_db, sql, exe_event->sql_event()->session_event());
-      exe_event->done_immediate();
+      RC rc = do_select(current_db, sql, exe_event->sql_event()->session_event());
+      if (rc == SUCCESS) {
+        exe_event->done_immediate();
+      }
+      else {
+          event->done_immediate();
+      }
     }
     break;
 
@@ -258,6 +263,10 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
         delete tmp_node;
       }
       end_trx_if_need(session, trx, false);
+
+      // 这里返回一个response表示查询失败了, 表不存在或者列名不存在，如果后期需要可以加上具体的失败类型
+      char response[] = "FAILURE\n";
+      session_event->set_response(response);
       return rc;
     }
     select_nodes.push_back(select_node);
