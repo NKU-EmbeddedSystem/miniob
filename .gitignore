@@ -10,3 +10,5 @@ tags
 *.log.*
 .gdbinit
 cmake-build-debug
+.tags
+.idea
