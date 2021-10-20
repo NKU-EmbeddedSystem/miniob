@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <string>
 #include <sstream>
+#include <algorithm>
 
 #include "execute_stage.h"
 
@@ -123,8 +124,13 @@ void ExecuteStage::handle_request(common::StageEvent *event) {
 
   switch (sql->flag) {
     case SCF_SELECT: { // select
-      do_select(current_db, sql, exe_event->sql_event()->session_event());
-      exe_event->done_immediate();
+      RC rc = do_select(current_db, sql, exe_event->sql_event()->session_event());
+      if (rc == SUCCESS) {
+        exe_event->done_immediate();
+      }
+      else {
+          event->done_immediate();
+      }
     }
     break;
 
@@ -213,6 +219,30 @@ void end_trx_if_need(Session *session, Trx *trx, bool all_right) {
   }
 }
 
+void dfs(std::vector<TupleSet> &tuple_sets, size_t index, TupleSet &res, Tuple &cur) {
+    if (index >= tuple_sets.size()) {
+        // 递归终点
+        res.add(Tuple(cur));
+        return;
+    }
+    TupleSet &tupleSet = tuple_sets[index];
+    std::vector<Tuple> values = tupleSet.tuples(); // 所有行
+    for (Tuple &value : values) {
+        int length = value.size();
+        // 一行
+        // 把这一行的所有元素加进cur里面
+        for (int i = 0; i < length; ++i) {
+            cur.add(value.get_pointer(i));
+        }
+        // 递归下一层
+        dfs(tuple_sets, index + 1, res, cur);
+        // 把这一行的所有元素删除
+        for (int i = 0; i< length; ++i) {
+            cur.pop_back();
+        }
+    }
+}
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
@@ -233,6 +263,10 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
         delete tmp_node;
       }
       end_trx_if_need(session, trx, false);
+
+      // 这里返回一个response表示查询失败了, 表不存在或者列名不存在，如果后期需要可以加上具体的失败类型
+      char response[] = "FAILURE\n";
+      session_event->set_response(response);
       return rc;
     }
     select_nodes.push_back(select_node);
@@ -262,6 +296,19 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   std::stringstream ss;
   if (tuple_sets.size() > 1) {
     // 本次查询了多张表，需要做join操作
+    // 先改schema，把所有表的schema叠加
+    TupleSet res;
+    Tuple cur;
+    TupleSchema schema;
+    std::reverse(tuple_sets.begin(), tuple_sets.end());
+    size_t length = tuple_sets.size();
+    for (size_t i = 0; i < length; ++i) {
+        schema.append(tuple_sets[i].schema());
+    }
+    res.set_schema(schema);
+    dfs(tuple_sets, 0, res, cur);
+    res.print(ss);
+
   } else {
     // 当前只查询一张表，直接返回结果即可
     tuple_sets.front().print(ss);
