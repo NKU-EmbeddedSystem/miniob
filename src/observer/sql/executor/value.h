@@ -15,10 +15,12 @@ See the Mulan PSL v2 for more details. */
 #ifndef __OBSERVER_SQL_EXECUTOR_VALUE_H_
 #define __OBSERVER_SQL_EXECUTOR_VALUE_H_
 
-#include <string.h>
+#include <cstring>
 
 #include <string>
 #include <ostream>
+#include <iomanip>
+#include <sstream>
 
 class TupleValue {
 public:
@@ -54,19 +56,27 @@ public:
   }
 
   void to_string(std::ostream &os) const override {
-    os << value_;
+//    os << value_;
+      std::stringstream ss;
+      ss << std::fixed << std::setprecision(2)<< value_;
+      std::string str = ss.str();
+      while ((str.find('.') != std::string::npos &&
+            str.substr(str.length() - 1, 1) == "0")
+            || str.substr(str.length() - 1, 1) == ".") {
+        str.pop_back();
+      }
+      os << str;
   }
 
   int compare(const TupleValue &other) const override {
-    const FloatValue & float_other = (const FloatValue &)other;
+    const auto & float_other = (const FloatValue &)other;
     float result = value_ - float_other.value_;
+    if (std::abs(result) < 1e-7)
+      return 0;
     if (result > 0) { // 浮点数没有考虑精度问题
       return 1;
     }
-    if (result < 0) {
-      return -1;
-    }
-    return 0;
+    return -1;
   }
 private:
   float value_;
