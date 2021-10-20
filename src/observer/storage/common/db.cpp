@@ -71,26 +71,6 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo 
   return RC::SUCCESS;
 }
 
-RC Db::delete_record(const char* table_name, const char* current_trx, const char* current_db, size_t condition_num, Condition *conditions, int &deleted_count){
-  RC rc = RC::SUCCESS;
-  if (opened_tables_.count(table_name) == 0){
-    return RC::SCHEMA_TABLE_NOT_EXIST;
-  }
-
-  // find table
-  Table *table = find_table(table_name);
-  std::string table_file_path = table_meta_file(path_.c_str(), table_name); // 文件路径可以移到Table模块
-  rc = table->drop(table_file_path.c_str(), table_name, path_.c_str());
-  if (rc != RC::SUCCESS) {
-    return rc;
-  }
-  
-  // 这里写删除记录
-  auto position = opened_tables_.find(table_name);
-  opened_tables_.erase(position);
-  LOG_INFO("delete entry success");
-  return RC::SUCCESS;
-}
 
 RC Db::drop_table(const char* table_name){
   RC rc = RC::SUCCESS;
@@ -112,7 +92,6 @@ RC Db::drop_table(const char* table_name){
   LOG_INFO("Drop table success. table name=%s", table_name);
   return RC::SUCCESS;
 }
-
 
 
 Table *Db::find_table(const char *table_name) const {
