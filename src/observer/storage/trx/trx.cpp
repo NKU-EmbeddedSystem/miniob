@@ -84,6 +84,27 @@ RC Trx::delete_record(Table *table, Record *record) {
   return rc;
 }
 
+RC Trx::update_record(Table *table, Record *record) {
+  // in case there has been a queued operation
+  Operation *old_oper = find_operation(table, record->rid);
+  if (old_oper != nullptr) {
+    // An queued INSERT or UPDATE can also be used for newer UPDATE
+    if (old_oper->type() == Operation::Type::INSERT
+      || old_oper->type() == Operation::Type::UPDATE) {
+      return RC::SUCCESS;
+    } else {
+      // already deleted or else, viewed as an error
+      return RC::GENERIC_ERROR;
+    }
+  }
+
+  // no queued operation, queue it and mark record
+  start_if_not_started();
+  set_record_trx_id(table, *record, trx_id_, false);
+  insert_operation(table, Operation::Type::UPDATE, record->rid);
+  return RC::SUCCESS;
+}
+
 void Trx::set_record_trx_id(Table *table, Record &record, int32_t trx_id, bool deleted) const {
   const FieldMeta *trx_field = table->table_meta().trx_field();
   int32_t *ptrx_id = (int32_t*)(record.data + trx_field->offset());
@@ -161,6 +182,14 @@ RC Trx::commit() {
           }
         }
         break;
+        case Operation::Type::UPDATE: {
+          rc = table->commit_update(this, rid);
+          if (rc != RC::SUCCESS) {
+            // handle rc
+            LOG_ERROR("Failed to commit update operation. rid=%d.%d, rc=%d:%s",
+                      rid.page_num, rid.slot_num, rc, strrc(rc));
+          }
+        }
         default: {
           LOG_PANIC("Unknown operation. type=%d", (int)operation.type());
         }
@@ -223,6 +252,11 @@ RC Trx::commit_insert(Table *table, Record &record) {
 }
 
 RC Trx::rollback_delete(Table *table, Record &record) {
+  set_record_trx_id(table, record, 0, false);
+  return RC::SUCCESS;
+}
+
+RC Trx::commit_update(Table *table, Record &record) {
   set_record_trx_id(table, record, 0, false);
   return RC::SUCCESS;
 }

@@ -9,3 +9,6 @@ tags
 /lib/
 *.log.*
 .gdbinit
+cmake-build-debug
+.tags
+.idea

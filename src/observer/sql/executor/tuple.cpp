@@ -17,8 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 
 Tuple::Tuple(const Tuple &other) {
-  LOG_PANIC("Copy constructor of tuple is not supported");
-  exit(1);
+  values_.resize(other.values_.size());
+  std::copy(other.values_.begin(), other.values_.end(), values_.begin());
 }
 
 Tuple::Tuple(Tuple &&other) noexcept : values_(std::move(other.values_)) {
@@ -54,6 +54,14 @@ void Tuple::add(float value) {
 
 void Tuple::add(const char *s, int len) {
   add(new StringValue(s, len));
+}
+
+void Tuple::pop_back() {
+  values_.pop_back();
+}
+
+void Tuple::add(int date_data[3]) {
+  add(new DateValue(date_data));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -232,6 +240,16 @@ void TupleRecordConverter::add_record(const char *record) {
       case CHARS: {
         const char *s = record + field_meta->offset();  // 现在当做Cstring来处理
         tuple.add(s, strlen(s));
+      }
+      break;
+      case DATE: {
+        const char *date_str = record + field_meta->offset();
+        int date_data[3];
+        if (DateValue::validate_data_format(date_str, date_data)) {
+          tuple.add(date_data);
+        } else {
+          LOG_PANIC("Unsupported date format. date=%s", date_str);
+        }
       }
       break;
       default: {
