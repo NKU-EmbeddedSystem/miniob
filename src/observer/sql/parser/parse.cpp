@@ -127,6 +127,10 @@ void attr_info_destroy(AttrInfo *attr_info) {
 
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr) {
+  if (selects->attr_num >= MAX_NUM) {
+    LOG_ERROR("to much arguments\n");
+    return;
+  }
   selects->attributes[selects->attr_num++] = *rel_attr;
 }
 void selects_append_relation(Selects *selects, const char *relation_name) {

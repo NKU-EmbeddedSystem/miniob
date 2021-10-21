@@ -82,6 +82,9 @@ RC Db::drop_table(const char* table_name){
   std::string table_meta_path = table_meta_file(path_.c_str(), table_name); // 文件路径可以移到Table模块
   std::string table_data_file = path_ + "/" + table_name + TABLE_DATA_SUFFIX;
 
+  // 删除索引
+  table->drop_all_indexes();
+
   // 删哈希表项
   auto position = opened_tables_.find(table_name);
   opened_tables_.erase(position);

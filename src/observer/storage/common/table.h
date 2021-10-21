@@ -49,7 +49,13 @@ public:
    * @param base_dir 表所在的文件夹，表记录数据文件、索引数据文件存放位置
    */
   RC open(const char *meta_file, const char *base_dir);
-  
+
+  /**
+   * 删除一个表的所有索引，用在删除的时候
+   * @return RC::SUCCESS表示成功
+   */
+  RC drop_all_indexes();
+
   RC insert_record(Trx *trx, int value_num, const Value *values);
   RC update_record(Trx *trx, ConditionFilter *filter, const char *attribute_name, const Value *value, int *updated_count);
   RC delete_record(Trx *trx, ConditionFilter *filter, int *deleted_count);
