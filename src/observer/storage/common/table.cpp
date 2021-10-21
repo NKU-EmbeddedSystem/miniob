@@ -625,6 +625,12 @@ RC Table::update_record(Trx *trx, Record *record) {
 RC Table::update_record(Trx *trx, ConditionFilter *filter, const char *attribute_name, const Value *value, int *updated_count) {
   // sanity check
   const FieldMeta *field = table_meta_.field(attribute_name);
+
+  if (field == nullptr) {
+    LOG_WARN("No such field. %s.%s", name(), attribute_name);
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+
   if (!type_match(field->type(), const_cast<Value *>(value))) {
     LOG_ERROR("Invalid value type. field name=%s, type=%d, but given=%d",
               field->name(), field->type(), value->type);
