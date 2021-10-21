@@ -69,6 +69,10 @@ ParserContext *get_context(yyscan_t scanner)
         TABLES
         INDEX
         SELECT
+        MAX
+        MIN
+        COUNT
+        AVG
         DESC
         SHOW
         SYNC
@@ -125,6 +129,7 @@ ParserContext *get_context(yyscan_t scanner)
 //非终结符
 
 %type <number> type;
+%type <number> agg_type;
 %type <condition1> condition;
 %type <value1> value;
 %type <number> number;
@@ -272,6 +277,12 @@ type:
        | FLOAT_T { $$=FLOATS; }
        | DATE_T { $$=DATE; }
        ;
+agg_type:
+	MAX { $$ = AGG_MAX; }
+	| MIN { $$ = AGG_MIN; }
+	| COUNT { $$ = AGG_COUNT; }
+	| AVG { $$ = AGG_AVG; }
+	;
 ID_get:
 	ID 
 	{
@@ -372,6 +383,16 @@ select_attr:
 			relation_attr_init(&attr, $1, $3);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
+		| agg_type LBRACE agg_const RBRACE agg_list {
+				AggDesc agg_desc;
+				agg_desc_init(&agg_desc, $1, "*");
+				selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+			}
+			| agg_type LBRACE ID RBRACE agg_list {
+					AggDesc agg_desc;
+					agg_desc_init(&agg_desc, $1, $3);
+					selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+				}
     ;
 attr_list:
     /* empty */
@@ -390,6 +411,25 @@ attr_list:
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
   	  }
   	;
+
+agg_const:
+	STAR
+	| number
+	;
+
+agg_list:
+	/* empty */
+	| COMMA agg_type LBRACE agg_const RBRACE agg_list {
+			AggDesc agg_desc;
+			agg_desc_init(&agg_desc, $2, "*");
+			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+		}
+		| COMMA agg_type LBRACE ID RBRACE agg_list {
+				AggDesc agg_desc;
+				agg_desc_init(&agg_desc, $2, $4);
+				selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+			}
+			;
 
 rel_list:
     /* empty */
