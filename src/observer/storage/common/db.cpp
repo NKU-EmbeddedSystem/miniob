@@ -73,22 +73,29 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo 
 
 
 RC Db::drop_table(const char* table_name){
-  RC rc = RC::SUCCESS;
   if (opened_tables_.count(table_name) == 0){
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
   // find table
   Table *table = find_table(table_name);
-  std::string table_file_path = table_meta_file(path_.c_str(), table_name); // 文件路径可以移到Table模块
-  rc = table->drop(table_file_path.c_str(), table_name, path_.c_str());
-  if (rc != RC::SUCCESS) {
-    return rc;
-  }
-  
+  std::string table_meta_path = table_meta_file(path_.c_str(), table_name); // 文件路径可以移到Table模块
+  std::string table_data_file = path_ + "/" + table_name + TABLE_DATA_SUFFIX;
+
   // 删哈希表项
   auto position = opened_tables_.find(table_name);
   opened_tables_.erase(position);
+  delete table;
+
+  // 删除文件
+  if (remove(table_data_file.c_str())) {
+    LOG_ERROR("Failed to remove data file %s\n", table_data_file.c_str());
+    return RC::IOERR;
+  }
+  if (remove(table_meta_path.c_str())) {
+    LOG_ERROR("Failed to remove meta file %s\n", table_meta_path.c_str());
+    return RC::IOERR;
+  }
   LOG_INFO("Drop table success. table name=%s", table_name);
   return RC::SUCCESS;
 }
