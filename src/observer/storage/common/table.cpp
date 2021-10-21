@@ -157,12 +157,14 @@ RC Table::open(const char *meta_file, const char *base_dir) {
 RC Table::drop_all_indexes() {
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; ++i) {
-    // close index
     BplusTreeIndex *index = dynamic_cast<BplusTreeIndex *>(indexes_[i]);
-    delete index;
 
     // remove index file
     std::string index_file = index_data_file(base_dir_.c_str(), name(), index->index_meta().name());
+    LOG_INFO("ready to delete index file %s\n", index_file);
+    
+    // close index
+    delete index;
     if (remove(index_file.c_str())) {
       LOG_ERROR("Failed to delete index file %s\n", index_file.c_str());
       return RC::IOERR;
