@@ -110,24 +110,6 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
   return rc;
 }
 
-RC Table::drop(const char *path, const char *name, const char *base_dir) {
-  // 删除元数据
-  if (remove(path)) {
-    LOG_ERROR("Failed to remove meta file. filename=%s, errmsg=%s", path, strerror(errno));
-    return RC::IOERR;
-  }
-
-  // 删除数据文件
-  std::string data_file = std::string(base_dir) + "/" + name + TABLE_DATA_SUFFIX;
-  if (remove(data_file.c_str())) {
-    LOG_ERROR("Failed to remove data file. filename=%s, errmsg=%s", path, strerror(errno));
-    return RC::IOERR;
-  }
-
-  LOG_INFO("Successfully drop table %s:%s", base_dir, name);
-  return RC::SUCCESS;
-}
-
 RC Table::open(const char *meta_file, const char *base_dir) {
   // 加载元数据文件
   std::fstream fs;
@@ -243,6 +225,7 @@ RC Table::insert_record(Trx *trx, Record *record) {
   }
   return rc;
 }
+
 RC Table::insert_record(Trx *trx, int value_num, const Value *values) {
   if (value_num <= 0 || nullptr == values ) {
     LOG_ERROR("Invalid argument. value num=%d, values=%p", value_num, values);
@@ -366,6 +349,7 @@ private:
   void (*record_reader_)(const char *, void *);
   void *context_;
 };
+
 static RC scan_record_reader_adapter(Record *record, void *context) {
   RecordReaderScanAdapter &adapter = *(RecordReaderScanAdapter *)context;
   adapter.consume(record);

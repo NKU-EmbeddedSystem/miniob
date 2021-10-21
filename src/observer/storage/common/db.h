@@ -33,6 +33,11 @@ public:
 
   RC create_table(const char *table_name, int attribute_count, const AttrInfo *attributes);
 
+  /**
+   * 删除表
+   * @param table_name 表名
+   * @return 错误码 RC::SUCCESS 表示成功
+   */
   RC drop_table(const char *table_name);
 
   Table *find_table(const char *table_name) const;
