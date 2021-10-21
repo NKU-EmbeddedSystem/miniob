@@ -120,6 +120,12 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
   attr_info->type = type;
   attr_info->length = length;
 }
+
+void agg_desc_init(AggDesc *agg_desc, AggType agg_type, const char *attribute_name) {
+  agg_desc->agg_type = agg_type;
+  agg_desc->attribute_name = attribute_name;
+}
+
 void attr_info_destroy(AttrInfo *attr_info) {
   free(attr_info->name);
   attr_info->name = nullptr;
@@ -136,7 +142,9 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr) {
 void selects_append_relation(Selects *selects, const char *relation_name) {
   selects->relations[selects->relation_num++] = strdup(relation_name);
 }
-
+void selects_append_agg(Selects *selects, AggDesc *agg_desc) {
+  selects->aggs[selects->agg_num++] = *agg_desc;
+}
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num) {
   assert(condition_num <= sizeof(selects->conditions)/sizeof(selects->conditions[0]));
   for (size_t i = 0; i < condition_num; i++) {
