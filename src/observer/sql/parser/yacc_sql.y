@@ -277,6 +277,7 @@ type:
        | FLOAT_T { $$=FLOATS; }
        | DATE_T { $$=DATE; }
        ;
+
 agg_type:
 	MAX { $$ = AGG_MAX; }
 	| MIN { $$ = AGG_MIN; }
@@ -368,31 +369,36 @@ select:				/*  select 语句的语法解析树*/
 	;
 
 select_attr:
-    STAR {  
+    STAR
+    		{
 			RelAttr attr;
 			relation_attr_init(&attr, NULL, "*");
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-    | ID attr_list {
+    | ID attr_list
+    		{
 			RelAttr attr;
 			relation_attr_init(&attr, NULL, $1);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-  	| ID DOT ID attr_list {
+    | ID DOT ID attr_list
+    		{
 			RelAttr attr;
 			relation_attr_init(&attr, $1, $3);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-		| agg_type LBRACE agg_const RBRACE agg_list {
-				AggDesc agg_desc;
-				agg_desc_init(&agg_desc, $1, "*");
-				selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
-			}
-			| agg_type LBRACE ID RBRACE agg_list {
-					AggDesc agg_desc;
-					agg_desc_init(&agg_desc, $1, $3);
-					selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
-				}
+    | agg_type LBRACE agg_const RBRACE agg_list
+    		{
+			AggDesc agg_desc;
+			agg_desc_init(&agg_desc, $1, "*");
+			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+		}
+    | agg_type LBRACE ID RBRACE agg_list
+    		{
+			AggDesc agg_desc;
+			agg_desc_init(&agg_desc, $1, $3);
+			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+		}
     ;
 attr_list:
     /* empty */
@@ -419,35 +425,40 @@ agg_const:
 
 agg_list:
 	/* empty */
-	| COMMA agg_type LBRACE agg_const RBRACE agg_list {
+	| COMMA agg_type LBRACE agg_const RBRACE agg_list
+		{
 			AggDesc agg_desc;
 			agg_desc_init(&agg_desc, $2, "*");
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-		| COMMA agg_type LBRACE ID RBRACE agg_list {
-				AggDesc agg_desc;
-				agg_desc_init(&agg_desc, $2, $4);
-				selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
-			}
-			;
+	| COMMA agg_type LBRACE ID RBRACE agg_list
+		{
+			AggDesc agg_desc;
+			agg_desc_init(&agg_desc, $2, $4);
+			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
+		}
+	;
 
 rel_list:
     /* empty */
-    | COMMA ID rel_list {	
-				selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
-		  }
+    | COMMA ID rel_list
+    		{
+			selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
+		}
     ;
 where:
     /* empty */ 
-    | WHERE condition condition_list {	
-				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
-			}
+    | WHERE condition condition_list
+    		{
+			// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+		}
     ;
 condition_list:
     /* empty */
-    | AND condition condition_list {
+    | AND condition condition_list
+    		{
 				// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
-			}
+		}
     ;
 condition:
     ID comOp value 
@@ -471,7 +482,7 @@ condition:
 			// $$->right_value = *$3;
 
 		}
-		|value comOp value 
+    | value comOp value
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 2];
 			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
@@ -491,7 +502,7 @@ condition:
 			// $$->right_value = *$3;
 
 		}
-		|ID comOp ID 
+    | ID comOp ID
 		{
 			RelAttr left_attr;
 			relation_attr_init(&left_attr, NULL, $1);
@@ -511,7 +522,7 @@ condition:
 			// $$->right_attr.attribute_name=$3;
 
 		}
-    |value comOp ID
+    | value comOp ID
 		{
 			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
 			RelAttr right_attr;
@@ -533,7 +544,7 @@ condition:
 			// $$->right_attr.attribute_name=$3;
 		
 		}
-    |ID DOT ID comOp value
+    | ID DOT ID comOp value
 		{
 			RelAttr left_attr;
 			relation_attr_init(&left_attr, $1, $3);
@@ -608,7 +619,7 @@ comOp:
 load_data:
 		LOAD DATA INFILE SSS INTO TABLE ID SEMICOLON
 		{
-		  CONTEXT->ssql->flag = SCF_LOAD_DATA;
+		  	CONTEXT->ssql->flag = SCF_LOAD_DATA;
 			load_data_init(&CONTEXT->ssql->sstr.load_data, $7, $4);
 		}
 		;
