@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 #include <vector>
+#include <algorithm>
 
 #include "sql/parser/parse.h"
 #include "sql/executor/value.h"
@@ -64,6 +65,9 @@ private:
 
 class TupleField {
 public:
+  TupleField() {
+
+  }
   TupleField(AttrType type, const char *table_name, const char *field_name) :
           type_(type), table_name_(table_name), field_name_(field_name){
   }
@@ -88,8 +92,13 @@ private:
 
 class TupleSchema {
 public:
-  TupleSchema() = default;
+  TupleSchema() {}
   ~TupleSchema() = default;
+
+  TupleSchema(const TupleSchema& schema) {
+    fields_.resize(schema.fields_.size());
+    std::copy(schema.fields_.begin(), schema.fields_.end(),fields_.begin());
+  }
 
   void add(AttrType type, const char *table_name, const char *field_name);
   void add_if_not_exists(AttrType type, const char *table_name, const char *field_name);
@@ -105,13 +114,21 @@ public:
   }
 
   int index_of_field(const char *table_name, const char *field_name) const;
+
+  int index_of_field(const char *field_name) const;
+
   void clear() {
     fields_.clear();
+  }
+
+  void pop_back() {
+    fields_.pop_back();
   }
 
   void print(std::ostream &os) const;
 public:
   static void from_table(const Table *table, TupleSchema &schema);
+
 private:
   std::vector<TupleField> fields_;
 };
@@ -140,6 +157,8 @@ public:
   const std::vector<Tuple> &tuples() const;
 
   void print(std::ostream &os) const;
+
+  void pop_row();
 public:
   const TupleSchema &schema() const {
     return schema_;

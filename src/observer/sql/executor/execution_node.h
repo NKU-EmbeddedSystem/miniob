@@ -45,4 +45,11 @@ private:
   std::vector<DefaultConditionFilter *> condition_filters_;
 };
 
+class MultiSelectExeNode : public ExecutionNode {
+public:
+    MultiSelectExeNode();
+    ~MultiSelectExeNode();
+    RC init(Trx *trx, std::vector<TupleSet> tuple_sets, TupleSchema && tuple_schema, std::vector<DefaultConditionFilter *> );
+};
+
 #endif //__OBSERVER_SQL_EXECUTOR_EXECUTION_NODE_H_
