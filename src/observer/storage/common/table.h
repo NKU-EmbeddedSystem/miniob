@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #define __OBSERVER_STORAGE_COMMON_TABLE_H__
 
 #include "storage/common/table_meta.h"
+#include "sql/executor/tuple.h"
 
 class DiskBufferPool;
 class RecordFileHandler;
@@ -70,6 +71,8 @@ public:
   const TableMeta &table_meta() const;
 
   RC sync();
+
+  RC create_tmp_table(TupleSet &tuple_set);
 
 public:
   RC commit_insert(Trx *trx, const RID &rid);

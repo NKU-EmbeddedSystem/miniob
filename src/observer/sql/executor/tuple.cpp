@@ -116,6 +116,17 @@ int TupleSchema::index_of_field(const char *table_name, const char *field_name) 
   return -1;
 }
 
+int TupleSchema::index_of_field(const char *field_name) const {
+  const int size = fields_.size();
+  for (int i = 0; i < size; i++) {
+    const TupleField &field = fields_[i];
+    if (0 == strcmp(field.field_name(), field_name)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 void TupleSchema::print(std::ostream &os) const {
   if (fields_.empty()) {
     os << "No schema";
@@ -212,6 +223,12 @@ const Tuple &TupleSet::get(int index) const {
 
 const std::vector<Tuple> &TupleSet::tuples() const {
   return tuples_;
+}
+
+void TupleSet::pop_row() {
+  for (int i = 0; i < tuples_.size(); ++i) {
+    tuples_[i].pop_back();
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////
