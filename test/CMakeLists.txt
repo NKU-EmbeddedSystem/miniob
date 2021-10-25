@@ -35,7 +35,7 @@ FILE(GLOB_RECURSE ALL_SRC *.cpp)
 FOREACH (F ${ALL_SRC})
     get_filename_component(prjName ${F} NAME_WE)
     MESSAGE("Build ${prjName} according to ${F}")
-    ADD_EXECUTABLE(${prjName} ${F})
+    ADD_EXECUTABLE(${prjName} ${F} sql_script_test.cpp)
     TARGET_LINK_LIBRARIES(${prjName} common pthread dl observer_static)
 
 ENDFOREACH (F)
