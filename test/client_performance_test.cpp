@@ -30,7 +30,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/metrics/console_reporter.h"
 
 #define MAX_MEM_BUFFER_SIZE 8192
-#define PORT_DEFAULT 66789
+#define PORT_DEFAULT 6789
 
 using namespace common;
 char *server_host = (char *)LOCAL_HOST;
@@ -93,30 +93,30 @@ void *test_server(void *param)
   return NULL;
 }
 
-int main(int argc, char *argv[])
-{
-
-  if (argc >= 2) {
-    server_host = argv[1];
-  }
-
-  MetricsRegistry &metric_registry = get_metrics_registry();
-  ConsoleReporter *console_reporter = get_console_reporter();
-  metric_registry.add_reporter(console_reporter);
-
-  Meter *tps_meter = new Meter();
-
-  metric_registry.register_metric("client.sendtps", tps_meter);
-
-  for (int i = 0; i < 8; i++) {
-    pthread_t pid;
-    pthread_create(&pid, NULL, test_server, tps_meter);
-  }
-
-  while (1) {
-    sleep(60);
-    metric_registry.snapshot();
-    metric_registry.report();
-  }
-  return 0;
-}
+//int main(int argc, char *argv[])
+//{
+//
+//  if (argc >= 2) {
+//    server_host = argv[1];
+//  }
+//
+//  MetricsRegistry &metric_registry = get_metrics_registry();
+//  ConsoleReporter *console_reporter = get_console_reporter();
+//  metric_registry.add_reporter(console_reporter);
+//
+//  Meter *tps_meter = new Meter();
+//
+//  metric_registry.register_metric("client.sendtps", tps_meter);
+//
+//  for (int i = 0; i < 8; i++) {
+//    pthread_t pid;
+//    pthread_create(&pid, NULL, test_script, tps_meter);
+//  }
+//
+//  while (1) {
+//    sleep(60);
+//    metric_registry.snapshot();
+//    metric_registry.report();
+//  }
+//  return 0;
+//}
