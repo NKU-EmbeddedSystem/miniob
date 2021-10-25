@@ -613,7 +613,21 @@ static RC record_reader_update_adapter(Record *record, void *context) {
 RC Table::update_record(Trx *trx, Record *record) {
   RC rc;
 
-  rc = record_handler_->update_record(record);
+  rc = delete_entry_of_indexes(record->data, record->rid, false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to update indexes of record (rid=%d.%d). rc=%d:%s",
+              record->rid.page_num, record->rid.slot_num, rc, strrc(rc));
+  } else {  
+    rc = insert_entry_of_indexes(record->data, record->rid);
+    if (rc != RC::SUCCESS) {
+      // how to rollback?
+      LOG_ERROR("Failed to update indexes of record (rid=%d.%d). rc=%d:%s",
+                record->rid.page_num, record->rid.slot_num, rc, strrc(rc));
+      return rc;
+    }
+    rc = record_handler_->update_record(record);
+  }
+
   // TODO: trx used correctly?
   if (rc == RC::SUCCESS) {
     if (trx != nullptr) {
