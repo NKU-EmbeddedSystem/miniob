@@ -567,20 +567,25 @@ public:
       : table_(table), trx_(trx), attribute_name_(attribute_name), value_(value), updated_count_(0)
       { }
 
-    RC update(Record *record) {
-      printf("Updated Record Id: pageNo %d, slotNo %d\n", record->rid.page_num, record->rid.slot_num);
+    RC update(Record *old_record) {
       // prepare record to commit to update
-      RC rc = make_record(record);
+      char* new_value_buff;
+      RC rc = make_record(old_record, &new_value_buff);
       if (rc != RC::SUCCESS) {
         return rc;
       }
 
+      Record new_record;
+      new_record.rid = old_record->rid;
+      new_record.data = new_value_buff;
+
       // perform update
-      rc = table_->update_record(trx_, record);
+      rc = table_->update_record(trx_, old_record, &new_record);
       if (rc == RC::SUCCESS) {
         updated_count_++;
       }
 
+      delete new_value_buff;
       return rc;
     }
 
@@ -590,12 +595,18 @@ public:
 
 
 private:
-    RC make_record(Record *record) {
-      const FieldMeta *field_meta = table_->table_meta().field(attribute_name_);
-      if (field_meta == nullptr) {
-        return RC::INVALID_ARGUMENT;
-      }
-      memcpy(record->data + field_meta->offset(), value_->data, field_meta->len());
+    RC make_record(Record *record, char **out_buff) {
+      auto meta = table_->table_meta();
+
+      // copy old record data
+      auto record_size = meta.record_size();
+      *out_buff = new char[record_size];
+      memcpy(*out_buff, record->data, record_size);
+
+      // update field of new record data
+      auto field_meta = meta.field(attribute_name_);
+      memcpy(*out_buff + field_meta->offset(), value_->data, field_meta->len());
+
       return RC::SUCCESS;
     }
 
@@ -610,31 +621,28 @@ static RC record_reader_update_adapter(Record *record, void *context) {
   return reinterpret_cast<RecordUpdater *>(context)->update(record);
 }
 
-RC Table::update_record(Trx *trx, Record *record) {
-  RC rc = RC::SUCCESS;
-  if (trx != nullptr) {
-    rc = trx->update_record(this, record);
-  } else {
-    rc = delete_entry_of_indexes(record->data, record->rid, false);
+RC Table::update_record(Trx *trx, Record *old_record, Record *new_record) {
+  RC rc;
+
+  rc = delete_entry_of_indexes(old_record->data, old_record->rid, false);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to update(delete) indexes of record (rid=%d.%d). rc=%d:%s",
+              old_record->rid.page_num, old_record->rid.slot_num, rc, strrc(rc));
+  } else {  
+    rc = insert_entry_of_indexes(new_record->data, new_record->rid);
     if (rc != RC::SUCCESS) {
-      LOG_ERROR("Failed to update indexes of record (rid=%d.%d). rc=%d:%s",
-                record->rid.page_num, record->rid.slot_num, rc, strrc(rc));
-    } else {
-      rc = insert_entry_of_indexes(record->data, record->rid);
-      if (rc != RC::SUCCESS) {
-        // how to rollback?
-        LOG_ERROR("Failed to update indexes of record (rid=%d.%d). rc=%d:%s",
-                  record->rid.page_num, record->rid.slot_num, rc, strrc(rc));
-        return rc;
-      }
-      rc = record_handler_->update_record(record);
+      // how to rollback?
+      LOG_ERROR("Failed to update(reinsert) indexes of record (rid=%d.%d). rc=%d:%s",
+                new_record->rid.page_num, new_record->rid.slot_num, rc, strrc(rc));
+      return rc;
     }
+    rc = record_handler_->update_record(new_record);
   }
 
   // TODO: trx used correctly?
   if (rc == RC::SUCCESS) {
     if (trx != nullptr) {
-      rc = trx->update_record(this, record);
+      rc = trx->update_record(this, new_record);
     }
   }
 

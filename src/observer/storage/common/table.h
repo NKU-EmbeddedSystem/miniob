@@ -89,7 +89,7 @@ private:
 
   RC insert_record(Trx *trx, Record *record);
   RC delete_record(Trx *trx, Record *record);
-  RC update_record(Trx *trx, Record *record);
+  RC update_record(Trx *trx, Record *old_record, Record *new_record);
 
 private:
   friend class RecordUpdater;
