@@ -190,6 +190,7 @@ RC Trx::commit() {
                       rid.page_num, rid.slot_num, rc, strrc(rc));
           }
         }
+        break;
         default: {
           LOG_PANIC("Unknown operation. type=%d", (int)operation.type());
         }
