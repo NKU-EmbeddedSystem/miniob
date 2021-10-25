@@ -279,7 +279,7 @@ void add_result(TupleSet &res, Tuple &cur, const TupleSchema &schema) {
   int j = 0;
   int i = 0;
 
-  while (j < target_schema.fields().size() && i < target_schema.fields().size()) {
+  while (j < target_schema.fields().size() && i < schema.fields().size()) {
     auto target = target_schema.fields()[j];
     auto origin = schema.fields()[i];
     while ((strcmp(origin.field_name(), target.field_name()) != 0 || strcmp(origin.table_name(), target.table_name()) != 0)) {
