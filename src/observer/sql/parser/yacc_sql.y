@@ -292,9 +292,15 @@ ID_get:
 	}
 	;
 
-	
+insert_value_list:
+    // empty
+    | COMMA LBRACE value value_list RBRACE insert_value_list
+    		{
+
+    		}
+    ;
 insert:				/*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE SEMICOLON 
+    INSERT INTO ID VALUES LBRACE value value_list RBRACE insert_value_list SEMICOLON
 		{
 			// CONTEXT->values[CONTEXT->value_length++] = *$6;
 

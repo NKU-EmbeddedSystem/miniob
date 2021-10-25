@@ -242,6 +242,7 @@ RC Table::insert_record(Trx *trx, Record *record) {
     }
     return rc;
   }
+
   return rc;
 }
 
@@ -251,18 +252,51 @@ RC Table::insert_record(Trx *trx, int value_num, const Value *values) {
     return RC::INVALID_ARGUMENT;
   }
 
-  char *record_data;
-  RC rc = make_record(value_num, values, record_data);
-  if (rc != RC::SUCCESS) {
-    LOG_ERROR("Failed to create a record. rc=%d:%s", rc, strrc(rc));
-    return rc;
+  // 数据进行分组
+  TupleSchema schema;
+  TupleSchema::from_table(this, schema);
+  int per_size = schema.fields().size();
+  if (value_num % per_size != 0) {
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+  int group = value_num / per_size;
+  if (group > 1) {
+    multi_insertion_flag = true;
   }
 
-  Record record;
-  record.data = record_data;
-  // record.valid = true;
-  rc = insert_record(trx, &record);
-  delete[] record_data;
+  RC rc;
+  for(int i = 0; i < group; ++i) {
+    char *record_data;
+    rc = make_record(per_size, &values[i * per_size], record_data);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to create a record. rc=%d:%s", rc, strrc(rc));
+      break;
+    }
+
+    Record record;
+    record.data = record_data;
+    // record.valid = true;
+    rc = insert_record(trx, &record);
+    delete[] record_data;
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to insert a record. rc=%d:%s", rc, strrc(rc));
+      break;
+    }
+
+    if (multi_insertion_flag) {
+      rollback_rids.push_back(record.rid);
+    }
+  }
+  
+  // rollback insertion
+  if (rc != SUCCESS && multi_insertion_flag) {
+    for (auto rid : rollback_rids) {
+      rollback_insert(trx, rid);
+    }
+  }
+  // clear flag
+  multi_insertion_flag = false;
+  rollback_rids.clear();
   return rc;
 }
 
