@@ -12,3 +12,4 @@ tags
 cmake-build-debug
 .tags
 .idea
+test/mytest.cpp
