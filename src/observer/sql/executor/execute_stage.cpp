@@ -399,12 +399,12 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
     res_schema.append(tmp_schema);
   }
 
-  // 反转结果集
   if (tuple_sets.size() == 0) {
     LOG_ERROR("no data\n");
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
+  // 反转结果集, 因为写在后面的表会先查
   std::reverse(tuple_sets.begin(), tuple_sets.end());
 
   // 收集多表查询条件

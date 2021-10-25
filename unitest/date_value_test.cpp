@@ -33,20 +33,23 @@ TEST(dateTest, validTests) {
 }
 
 TEST(dateTest, invalidTests) {
-  auto str1 = "202x-10-19";
+  auto str1 = "2021-2-29";
   ASSERT_FALSE(DateValue::validate_data_format(str1, nullptr));
 
-  auto str2 = "2020--19";
+  auto str2 = "202x-10-19";
   ASSERT_FALSE(DateValue::validate_data_format(str2, nullptr));
 
-  auto str3 = "2020";
+  auto str3 = "2020--19";
   ASSERT_FALSE(DateValue::validate_data_format(str3, nullptr));
 
-  auto str4 = "2020-13-07";
+  auto str4 = "2020";
   ASSERT_FALSE(DateValue::validate_data_format(str4, nullptr));
 
-  auto str5 = "2020-3-33";
+  auto str5 = "2020-13-07";
   ASSERT_FALSE(DateValue::validate_data_format(str5, nullptr));
+
+  auto str6 = "2020-3-33";
+  ASSERT_FALSE(DateValue::validate_data_format(str6, nullptr));
 }
 
 #include <ctime>
