@@ -71,7 +71,6 @@ ADD_SUBDIRECTORY(deps)
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(unitest)
 ADD_SUBDIRECTORY(test)
-ADD_SUBDIRECTORY(mytest)
 
 
 # install 准备安装的目录是cmakefile 的当前目录， 不是build 后生成的目录
