@@ -49,6 +49,8 @@ bool DateValue::check_date_manually(const tm *t) {
             : (day <= 28);
     }
   }
+
+  return true;
 }
 
 bool DateValue::check_date_with_syscall(const tm *t) {
