@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 static const Json::StaticString FIELD_TABLE_NAME("table_name");
 static const Json::StaticString FIELD_FIELDS("fields");
 static const Json::StaticString FIELD_INDEXES("indexes");
+static const Json::StaticString UNIQUE_INDEXES("unique_indexes");
 
 std::vector<FieldMeta> TableMeta::sys_fields_;
 
@@ -192,6 +193,15 @@ int TableMeta::serialize(std::ostream &ss) const {
   }
   table_value[FIELD_INDEXES] = std::move(indexes_value);
 
+  // add unique index serialize
+  Json::Value unique_indexes_value;
+  for (const auto &index : unique_indexes_) {
+    Json::Value unique_index_value;
+    index.to_json(unique_index_value);
+    unique_indexes_value.append(std::move(unique_index_value));
+  }
+  table_value[UNIQUE_INDEXES] = std::move(unique_indexes_value);
+
   Json::StreamWriterBuilder builder;
   Json::StreamWriter *writer = builder.newStreamWriter();
 
@@ -274,6 +284,27 @@ int TableMeta::deserialize(std::istream &is) {
     indexes_.swap(indexes);
   }
 
+  // deserialize unique indexes
+  const Json::Value &unique_indexes_value= table_value[UNIQUE_INDEXES];
+  if (!unique_indexes_value.empty()) {
+    if (!unique_indexes_value.isArray()) {
+      LOG_ERROR("Invalid table meta. indexes is not array, json value=%s", indexes_value.toStyledString().c_str());
+      return -1;
+    }
+    const int index_num = unique_indexes_value.size();
+    std::vector<IndexMeta> indexes(index_num);
+    for (int i = 0; i < index_num; i++) {
+      IndexMeta &index = indexes[i];
+
+      const Json::Value &index_value = indexes_value[i];
+      rc = IndexMeta::from_json(*this, index_value, index);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("Failed to deserialize table meta. table name=%s", table_name.c_str());
+        return -1;
+      }
+    }
+    unique_indexes_.swap(indexes);
+  }
   return (int)(is.tellg() - old_pos);
 }
 
