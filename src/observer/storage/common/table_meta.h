@@ -65,6 +65,7 @@ private:
   std::string   name_;
   std::vector<FieldMeta>  fields_; // 包含sys_fields
   std::vector<IndexMeta>  indexes_;
+  std::vector<IndexMeta>  unique_indexes_; // 唯一索引，需要重载serialize和deserialize
 
   int  record_size_ = 0;
 
