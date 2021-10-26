@@ -719,7 +719,6 @@ RC Table::create_unique_index(Trx *trx, const char *index_name, const char *attr
   table_meta_.swap(new_table_meta);
 
   LOG_INFO("add a new index (%s) on the table (%s)", index_name, name());
-
   return rc;
 }
 
