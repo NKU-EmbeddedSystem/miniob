@@ -126,6 +126,7 @@ public:
   }
 
   void print(std::ostream &os) const;
+  void mprint(std::ostream &os);
 public:
   static void from_table(const Table *table, TupleSchema &schema);
 
@@ -159,6 +160,8 @@ public:
   void print(std::ostream &os) const;
 
   void pop_row();
+
+  void mprint(std::ostream &os);
 public:
   const TupleSchema &schema() const {
     return schema_;
