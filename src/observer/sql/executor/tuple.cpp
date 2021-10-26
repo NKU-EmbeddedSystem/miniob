@@ -153,6 +153,29 @@ void TupleSchema::print(std::ostream &os) const {
   os << fields_.back().field_name() << std::endl;
 }
 
+void TupleSchema::mprint(std::ostream &os) {
+   if (fields_.empty()) {
+    os << "No schema";
+    return;
+  }
+
+  // 判断有多张表还是只有一张表
+  std::set<std::string> table_names;
+  for (const auto &field: fields_) {
+    table_names.insert(field.table_name());
+  }
+
+  for (std::vector<TupleField>::const_iterator iter = fields_.begin(), end = --fields_.end();
+       iter != end; ++iter) {
+    os << iter->table_name() << ".";
+    os << iter->field_name() << " | ";
+  }
+
+  os << fields_.back().table_name() << ".";
+  os << fields_.back().field_name() << std::endl;
+ 
+}
+
 /////////////////////////////////////////////////////////////////////////////
 TupleSet::TupleSet(TupleSet &&other) : tuples_(std::move(other.tuples_)), schema_(other.schema_){
   other.schema_.clear();
@@ -229,6 +252,27 @@ void TupleSet::pop_row() {
   for (int i = 0; i < tuples_.size(); ++i) {
     tuples_[i].pop_back();
   }
+}
+
+void TupleSet::mprint(std::ostream &os) {
+if (schema_.fields().empty()) {
+    LOG_WARN("Got empty schema");
+    return;
+  }
+
+  schema_.mprint(os);
+
+  for (const Tuple &item : tuples_) {
+    const std::vector<std::shared_ptr<TupleValue>> &values = item.values();
+    for (std::vector<std::shared_ptr<TupleValue>>::const_iterator iter = values.begin(), end = --values.end();
+          iter != end; ++iter) {
+      (*iter)->to_string(os);
+      os << " | ";
+    }
+    values.back()->to_string(os);
+    os << std::endl;
+  }
+
 }
 
 /////////////////////////////////////////////////////////////////////////////

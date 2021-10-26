@@ -427,7 +427,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
      * 现在结果集已经筛选了一个表的条件，然后还需要手动筛选两个表的条件
      */
     dfs(tuple_sets, 0, res, cur, multiple_conditions, connect_schema);
-    res.print(ss);
+    res.mprint(ss);
 
   } else {
     // 当前只查询一张表，直接返回结果即可
