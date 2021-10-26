@@ -84,6 +84,7 @@ RC Db::drop_table(const char* table_name){
 
   // 删除索引
   table->drop_all_indexes();
+  table->drop_all_unique_indexes();
 
   // 删哈希表项并且关闭文件
   auto position = opened_tables_.find(table_name);
