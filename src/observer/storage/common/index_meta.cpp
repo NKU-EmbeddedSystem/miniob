@@ -69,6 +69,10 @@ const char *IndexMeta::field() const {
   return field_.c_str();
 }
 
+const int IndexMeta::get_index_type() const{
+  return index_type;
+}
+
 void IndexMeta::desc(std::ostream &os) const {
   os << "index name=" << name_
       << ", field=" << field_;

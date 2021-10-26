@@ -27,13 +27,22 @@ class Value;
 
 class IndexMeta {
 public:
-  IndexMeta() = default;
+  // IndexMeta() = default;
+  IndexMeta(){
+    this->index_type=0;
+  }
 
   RC init(const char *name, const FieldMeta &field);
+  RC set_unique(){
+    this->index_type=1;
+    return RC::SUCCESS;
+  }
+  
 
 public:
   const char *name() const;
   const char *field() const;
+  const int get_index_type() const;
 
   void desc(std::ostream &os) const;
 public:
@@ -43,5 +52,6 @@ public:
 private:
   std::string       name_;
   std::string       field_;
+  int index_type;
 };
 #endif // __OBSERVER_STORAGE_COMMON_INDEX_META_H__
