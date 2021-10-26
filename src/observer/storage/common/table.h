@@ -57,6 +57,8 @@ public:
    */
   RC drop_all_indexes();
 
+  RC drop_all_unique_indexes();
+
   RC insert_record(Trx *trx, int value_num, const Value *values);
   RC update_record(Trx *trx, ConditionFilter *filter, const char *attribute_name, const Value *value, int *updated_count);
   RC delete_record(Trx *trx, ConditionFilter *filter, int *deleted_count);
@@ -64,6 +66,8 @@ public:
   RC scan_record(Trx *trx, ConditionFilter *filter, int limit, void *context, void (*record_reader)(const char *data, void *context));
 
   RC create_index(Trx *trx, const char *index_name, const char *attribute_name);
+
+  RC create_unique_index(Trx *trx, const char *index_name, const char *attribute_name);
 
 public:
   const char *name() const;
@@ -111,6 +115,7 @@ private:
   int                     file_id_;
   RecordFileHandler *     record_handler_;   /// 记录操作
   std::vector<Index *>    indexes_;
+  std::vector<Index *>    unique_indexes_; //唯一索引
   bool                    multi_insertion_flag;
   std::vector<RID>        rollback_rids;
 };

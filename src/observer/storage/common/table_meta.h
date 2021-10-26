@@ -36,6 +36,8 @@ public:
 
   RC add_index(const IndexMeta &index);
 
+  RC add_unique_index(const IndexMeta &index);
+
 public:
   const char * name() const;
   const FieldMeta * trx_field() const;
@@ -48,7 +50,9 @@ public:
   const IndexMeta * index(const char *name) const;
   const IndexMeta * find_index_by_field(const char *field) const;
   const IndexMeta * index(int i) const;
+  const IndexMeta * unique_index(int i) const;
   int index_num() const;
+  int unique_index_num() const;
 
   int record_size() const;
 

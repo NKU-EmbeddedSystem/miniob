@@ -102,6 +102,7 @@ ParserContext *get_context(yyscan_t scanner)
         LOAD
         DATA
         INFILE
+        UNIQUE
         EQ
         LT
         GT
@@ -220,6 +221,11 @@ create_index:		/*create index 语句的语法解析树*/
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
 			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, $7);
 		}
+    | CREATE UNIQUE INDEX ID ON ID LBRACE ID RBRACE SEMICOLON
+    		{
+			CONTEXT->ssql->flag = SCF_CREATE_UNIQUE_INDEX;// "create_unique_index";
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $4, $6, $8);
+    		}
     ;
 
 drop_index:			/*drop index 语句的语法解析树*/

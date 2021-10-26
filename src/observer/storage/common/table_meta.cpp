@@ -102,6 +102,11 @@ RC TableMeta::add_index(const IndexMeta &index) {
   return RC::SUCCESS;
 }
 
+RC TableMeta::add_unique_index(const IndexMeta &index) {
+  unique_indexes_.push_back(index);
+  return RC::SUCCESS;
+}
+
 const char *TableMeta::name() const {
   return name_.c_str();
 }
@@ -147,6 +152,12 @@ const IndexMeta * TableMeta::index(const char *name) const {
       return &index;
     }
   }
+
+  for (const IndexMeta &index : unique_indexes_) {
+    if (0 == strcmp(index.name(), name)) {
+      return &index;
+    }
+  }
   return nullptr;
 }
 
@@ -156,15 +167,29 @@ const IndexMeta * TableMeta::find_index_by_field(const char *field) const {
       return &index;
     }
   }
+
+  for (const IndexMeta &index : unique_indexes_) {
+    if (0 == strcmp(index.field(), field)) {
+      return &index;
+    }
+  }
   return nullptr;
 }
 
-const IndexMeta * TableMeta::index(int i ) const {
+const IndexMeta * TableMeta::index(int i) const {
   return &indexes_[i];
+}
+
+const IndexMeta * TableMeta::unique_index(int i) const {
+  return &unique_indexes_[i];
 }
 
 int TableMeta::index_num() const {
   return indexes_.size();
+}
+
+int TableMeta::unique_index_num() const {
+  return unique_indexes_.size();
 }
 
 int TableMeta::record_size() const {
@@ -296,7 +321,7 @@ int TableMeta::deserialize(std::istream &is) {
     for (int i = 0; i < index_num; i++) {
       IndexMeta &index = indexes[i];
 
-      const Json::Value &index_value = indexes_value[i];
+      const Json::Value &index_value = unique_indexes_value[i];
       rc = IndexMeta::from_json(*this, index_value, index);
       if (rc != RC::SUCCESS) {
         LOG_ERROR("Failed to deserialize table meta. table name=%s", table_name.c_str());
@@ -328,5 +353,12 @@ void TableMeta::desc(std::ostream &os) const {
     index.desc(os);
     os << std::endl;
   }
+
+  for (const auto &index: unique_indexes_) {
+    os << '\t';
+    index.desc(os);
+    os << std::endl;
+  }
+
   os << ')' << std::endl;
 }
