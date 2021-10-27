@@ -15,6 +15,8 @@ See the Mulan PSL v2 for more details. */
 #include <limits.h>
 #include <string.h>
 #include <algorithm>
+#include <sql/executor/execution_node.h>
+#include <sql/executor/execute_stage.h>
 
 #include "storage/common/table.h"
 #include "storage/common/table_meta.h"
@@ -267,6 +269,8 @@ RC Table::rollback_insert(Trx *trx, const RID &rid) {
   return rc;
 }
 
+
+
 RC Table::insert_record(Trx *trx, Record *record) {
   RC rc = RC::SUCCESS;
 
@@ -390,6 +394,51 @@ static bool type_match(AttrType field_type, Value *value) {
   return false;
 }
 
+// 加在make record这里会好一点
+bool Table::find_if_exist_unique_record(int value_num, const Value *values) {
+  for (int i = 0; i < value_num; ++i) {
+    Value &value = const_cast<Value &>(values[i]);
+    const FieldMeta* field_meta = table_meta_.field(i + table_meta_.sys_field_num());
+    IndexMeta *index_meta = const_cast<IndexMeta *>(table_meta_.find_index_by_field(field_meta->name()));
+    if (index_meta == nullptr) {
+      continue;
+    }
+    Index *index = find_index(index_meta->name());
+    if (std::find(unique_indexes_.begin(), unique_indexes_.end(), index) != unique_indexes_.begin()) {
+     // attr
+     RelAttr attr;
+     relation_attr_init(&attr,name(), field_meta->name());
+
+     // condition
+     Condition condition;
+     condition.left_attr = attr;
+     condition.left_is_attr = true;
+     condition.right_value = value;
+     condition.right_is_attr = false;
+     condition.comp = EQUAL_TO;
+
+     // filter
+     std::vector<DefaultConditionFilter *> condition_filters;
+     auto *condition_filter = new DefaultConditionFilter();
+     RC rc = condition_filter->init(*this, condition);
+     condition_filters.push_back(condition_filter);
+
+     TupleSchema schema;
+     rc = schema_add_field(this, field_meta->name(), schema);
+     // select node
+     auto *select_node = new SelectExeNode;
+     rc = select_node->init(nullptr, this, std::move(schema), std::move(condition_filters));
+     TupleSet res_set;
+     select_node->execute(res_set);
+     if (!res_set.is_empty())
+       return true;
+    }
+  }
+
+  return false;
+}
+
+
 RC Table::make_record(int value_num, const Value *values, char * &record_out) {
   // 检查字段类型是否一致
   if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
@@ -410,6 +459,11 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
     if (!value_validation(&value)) {
       return RC::INVALID_ARGUMENT;
     }
+  }
+
+  // 如果找到重复的字段，返回false
+  if (find_if_exist_unique_record(value_num, values)) {
+      return RC::SCHEMA_INDEX_EXIST;
   }
 
   // 复制所有字段的值
@@ -983,6 +1037,14 @@ Index *Table::find_index(const char *index_name) const {
       return index;
     }
   }
+
+  // find unique_index
+  for (Index *index: unique_indexes_) {
+    if (0 == strcmp(index->index_meta().name(), index_name)) {
+      return index;
+    }
+  }
+
   return nullptr;
 }
 
@@ -1052,6 +1114,16 @@ RC Table::sync() {
   }
 
   for (Index *index: indexes_) {
+    rc = index->sync();
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to flush index's pages. table=%s, index=%s, rc=%d:%s",
+                name(), index->index_meta().name(), rc, strrc(rc));
+      return rc;
+    }
+  }
+
+  // flush unique_index
+  for (Index *index: unique_indexes_) {
     rc = index->sync();
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to flush index's pages. table=%s, index=%s, rc=%d:%s",

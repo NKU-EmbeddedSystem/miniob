@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/field_meta.h"
 #include "storage/common/index_meta.h"
 #include "common/lang/serializable.h"
+#include "bplus_tree_index.h"
 
 class TableMeta : public common::Serializable {
 public:
@@ -48,7 +49,7 @@ public:
   int sys_field_num() const;
 
   const IndexMeta * index(const char *name) const;
-  const IndexMeta * find_index_by_field(const char *field) const;
+  const IndexMeta *const find_index_by_field(const char *field) const;
   const IndexMeta * index(int i) const;
   const IndexMeta * unique_index(int i) const;
   int index_num() const;
