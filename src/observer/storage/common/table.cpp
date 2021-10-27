@@ -43,6 +43,22 @@ Table::~Table() {
     data_buffer_pool_ = nullptr;
   }
 
+  const int index_num = unique_indexes_.size();
+  for (int i = index_num - 1; i >= 0; --i) {
+    BplusTreeIndex* index = dynamic_cast<BplusTreeIndex *>(unique_indexes_[i]);
+    if (index == nullptr) {
+      LOG_ERROR("error in index index\n");
+      break;
+    }
+    RC rc = index->sync();
+    if (rc == SUCCESS)
+      LOG_INFO("Successfully close index %s on %s\n", index->index_meta().name(), index->index_meta().field());
+    else
+      LOG_ERROR("Error when closing index %s on %s\n", index->index_meta().name(), index->index_meta().field());
+    free(index);
+  }
+  unique_indexes_.clear();
+
   LOG_INFO("Table has been closed: %s", name());
 }
 
