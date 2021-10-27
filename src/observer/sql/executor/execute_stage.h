@@ -15,9 +15,12 @@ See the Mulan PSL v2 for more details. */
 #ifndef __OBSERVER_SQL_EXECUTE_STAGE_H__
 #define __OBSERVER_SQL_EXECUTE_STAGE_H__
 
+#include <storage/common/field_meta.h>
 #include "common/seda/stage.h"
 #include "sql/parser/parse.h"
 #include "rc.h"
+#include "tuple.h"
+#include <storage/common/table.h>
 
 class SessionEvent;
 
@@ -45,4 +48,14 @@ private:
   Stage *mem_storage_stage_ = nullptr;
 };
 
+static inline RC schema_add_field(Table *table, const char *field_name, TupleSchema &schema) {
+  const FieldMeta *field_meta = table->table_meta().field(field_name);
+  if (nullptr == field_meta) {
+    LOG_WARN("No such field. %s.%s", table->name(), field_name);
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+
+  schema.add_if_not_exists(field_meta->type(), table->name(), field_meta->name());
+  return RC::SUCCESS;
+}
 #endif //__OBSERVER_SQL_EXECUTE_STAGE_H__
