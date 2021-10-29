@@ -121,14 +121,53 @@ void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t
   attr_info->length = length;
 }
 
-void agg_desc_init(AggDesc *agg_desc, AggType agg_type, const char *attribute_name) {
-  agg_desc->agg_type = agg_type;
-  agg_desc->attribute_name = attribute_name;
-}
-
 void attr_info_destroy(AttrInfo *attr_info) {
   free(attr_info->name);
   attr_info->name = nullptr;
+}
+
+void agg_desc_init_string(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, char *relation_name, char *attribute_name) {
+  agg_desc->agg_type = agg_type;
+  agg_desc->agg_operand_type = agg_operand_type;
+  agg_desc->agg_attr.relation_name = relation_name;
+  agg_desc->agg_attr.attribute_name = attribute_name;
+}
+
+void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, int number) {
+  agg_desc->agg_type = agg_type;
+  agg_desc->agg_operand_type = agg_operand_type;
+  agg_desc->number = number;
+}
+
+const char *agg_type_name(AggType agg_type) {
+  static const char *agg_type_names[] = {
+    [AGG_MAX] = "max",
+    [AGG_MIN] = "min",
+    [AGG_COUNT] = "count",
+    [AGG_AVG] = "avg"
+  };
+
+  if (agg_type < AGG_MAX || agg_type > AGG_AVG) {
+    LOG_ERROR("Unsupported aggregation type: %d", agg_type);
+    return nullptr;
+  }
+
+  return agg_type_names[agg_type];
+}
+
+const char *agg_operand_name(AggOperandType operand_type) {
+  static const char *operand_type_names[] = {
+    [AGG_FIELD] = "field",
+    [AGG_STAR] = "*",
+    [AGG_NUMBER] = "number",
+  };
+
+  if (operand_type < AGG_FIELD || operand_type > AGG_NUMBER) {
+    LOG_ERROR("Unsupported aggregation operand type: %d", operand_type);
+    return nullptr;
+  }
+
+  return operand_type_names[operand_type];
 }
 
 void selects_init(Selects *selects, ...);
