@@ -106,6 +106,8 @@ void AggregationExecutor::do_aggregation() {
 
 void AggregationExecutor::collect_result(AggTupleSet &out_tuple_set) {
   auto& schema = out_tuple_set.schema();
+
+  std::reverse(aggregators_.begin(), aggregators_.end());
   for (auto aggregator : aggregators_) {
     schema.add(aggregator->desc());
   }
