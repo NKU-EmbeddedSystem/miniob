@@ -5,10 +5,20 @@
 #include <iostream>
 #include <netdb.h>
 #include <cstring>
+#include <string>
+#include <vector>
+
 #include "common/defs.h"
 
 #define PORT_DEFAULT 6789
 #define MAX_MEM_BUFFER_SIZE 8192
+
+using std::cout;
+using std::ofstream;
+using std::ifstream;
+using std::endl;
+using std::string;
+using std::vector;
 
 static char *server_host = (char *)LOCAL_HOST;
 
@@ -40,72 +50,90 @@ int connect() {
   return sockfd;
 }
 
-#include <string>
-#include <fstream>
-
-using std::cout;
-using std::ofstream;
-using std::ifstream;
-using std::endl;
-using std::string;
-
-static string fname = "sql.txt";
-
-void test_script(const string& sql_script_name)
+void test_script(const vector<string> &sql_script_names)
 {
-  std::cout << "Begin to connect server. " << std::endl;
+  std::cout << "Begin to connect server. " << endl << endl;
 
   int sockfd = connect();
 
-  string base_dir = "../../test/";
-  string out_base_dir = "../../build/";
-  ifstream fin(base_dir + sql_script_name);
-  ofstream fout(out_base_dir + sql_script_name + ".result");
-  ofstream bout(out_base_dir + sql_script_name + ".both");
+  for (const auto &sql_script_name : sql_script_names) {
+    printf("Start test: %s\n", sql_script_name.c_str());
 
-  if (!fin.is_open() || !fout.is_open()) {
-    exit(-1);
+    string base_dir = "../../test/";
+    string out_base_dir = "../../build/";
+    string sql_script_path = base_dir + sql_script_name;
+    string result_path = out_base_dir + sql_script_name + ".result";
+    string both_sql_and_result_path = out_base_dir + sql_script_name + ".both";
+
+    ifstream fin(sql_script_path);
+    if (!fin.is_open()) {
+      printf("Fail to open script: %s\n", sql_script_path.c_str());
+      exit(-1);
+    }
+
+    ofstream fout(result_path);
+    if (!fout.is_open()) {
+      printf("Fail to create file: %s\n", result_path.c_str());
+      exit(-1);
+    }
+
+    ofstream bout(both_sql_and_result_path);
+    if (!bout.is_open()) {
+      printf("Fail to create file: %s\n", both_sql_and_result_path.c_str());
+      exit(-1);
+    }
+
+    char send_buf[MAX_MEM_BUFFER_SIZE] = {0};
+    char recv_buf[MAX_MEM_BUFFER_SIZE] = {0};
+
+    while (!fin.eof()) {
+      memset(send_buf, 0, sizeof(send_buf));
+      fin.getline(send_buf, sizeof(send_buf));
+      if (strlen(send_buf) == 0) {
+        break;
+      }
+      if (strlen(send_buf) > 2 && send_buf[0] == '-' && send_buf[1] == '-') {
+        continue;
+      }
+      send_buf[strlen(send_buf) - 1] = '\0';
+      if (send(sockfd, send_buf, strlen(send_buf) + 1, 0) == -1) {
+        perror("send error \n");
+        exit(1);
+      }
+      cout << "  [SQL] " << send_buf << endl;
+      usleep(200000);
+      memset(recv_buf, 0, sizeof(recv_buf));
+      int len = recv(sockfd, recv_buf, sizeof(recv_buf), 0);
+      if (len < 0) {
+        printf("connection exception\n");
+        break;
+      }
+      if (len == 0) {
+        printf("Connection has been closed\n");
+        break;
+      }
+      fout << recv_buf << endl;
+      bout << send_buf << endl
+           << recv_buf << endl;
+    }
+    printf("Successfully finish test: %s.\n\n", sql_script_name.c_str());
   }
-
-  char send_buf[MAX_MEM_BUFFER_SIZE] = {0};
-  char recv_buf[MAX_MEM_BUFFER_SIZE] = {0};
-
-  while (!fin.eof()) {
-    memset(send_buf, 0, sizeof(send_buf));
-    fin.getline(send_buf, sizeof(send_buf));
-    if (strlen(send_buf) == 0) {
-      break;
-    }
-    send_buf[strlen(send_buf) - 1] = '\0';
-    if (send(sockfd, send_buf, strlen(send_buf) + 1, 0) == -1) {
-      perror("send error \n");
-      exit(1);
-    }
-
-    usleep(250000);
-    memset(recv_buf, 0, sizeof(recv_buf));
-    int len = recv(sockfd, recv_buf, sizeof(recv_buf), 0);
-    if (len < 0) {
-      printf("connection exception\n");
-      break;
-    }
-    if (len == 0) {
-      printf("Connection has been closed\n");
-      break;
-    }
-    fout << recv_buf;
-    bout << send_buf << endl
-      << recv_buf << endl;
-  }
-
   close(sockfd);
   chdir("../../");
   char cwd_buff[80];
   getcwd(cwd_buff, sizeof(cwd_buff));
-  printf("Successfully finish test.\n");
-  printf("Results are saved at %s/build\n", cwd_buff);
+  printf("Results are saved at %s/build\n\n", cwd_buff);
 }
 
 int main() {
-  test_script("sql.txt");
+  test_script({
+    "basic_test.sql",
+    "identifier_test.sql",
+    "aggregation_empty_test.sql",
+    "aggregation_fail_test.sql",
+    "aggregation_test.sql",
+    "aggregation_test2.sql",
+    "aggregation_test3.sql",
+    "aggregation_test4.sql",
+  });
 }

@@ -282,7 +282,7 @@ related functions that you can put in the same interface, so the per-function
 syntactic overhead will be much lower.
 
 If you are concerned about the performance overhead incurred by virtual
-functions, and profiling confirms your concern, you can combine this with the
+functions, and profiling confirms your concern, you can collect_result this with the
 recipe for [mocking non-virtual methods](#MockingNonVirtualMethods).
 
 ### Old-Style `MOCK_METHODn` Macros
@@ -3246,7 +3246,7 @@ you thought. From that it should be obvious that the third `EXPECT_CALL` is
 written wrong. Case solved.
 
 If you are interested in the mock call trace but not the stack traces, you can
-combine `--gmock_verbose=info` with `--gtest_stack_trace_depth=0` on the test
+collect_result `--gmock_verbose=info` with `--gtest_stack_trace_depth=0` on the test
 command line.
 
 ### Running Tests in Emacs

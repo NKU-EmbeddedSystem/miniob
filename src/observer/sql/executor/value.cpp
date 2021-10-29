@@ -80,5 +80,5 @@ void DateValue::from_raw_data(date_t days, tm *t) {
 void DateValue::init_str(date_t days) {
   tm t;
   from_raw_data(days, &t);
-  strftime(str, sizeof(str), "%Y-%m-%d", &t);
+  strftime(str_, sizeof(str_), "%Y-%m-%d", &t);
 }

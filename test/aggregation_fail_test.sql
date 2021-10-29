@@ -1,0 +1,11 @@
+drop table agg_test;
+create table agg_test(id int, iv int, sv char, dv date, fv float);
+insert into agg_test values(1, 1, "FNC", "2011-11-1", 3.0);
+insert into agg_test values(2, 2, "TPA", "2012-11-1", 3.0);
+insert into agg_test values(3, 3, "SKT", "2013-11-1", 3.0);
+insert into agg_test values(4, 4, "SSW", "2014-11-1", 3.1);
+select max(*) from agg_test;
+select min(*) from agg_test;
+select avg(*) from agg_test;
+select avg(dv) from agg_test;
+select avg(sv) from agg_test;

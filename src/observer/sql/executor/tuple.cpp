@@ -274,3 +274,55 @@ void TupleRecordConverter::add_record(const char *record) {
 }
 
 
+void AggSchema::print(std::ostream &os) const {
+  if (fields_.empty()) {
+    os << "No schema";
+    return;
+  }
+
+  for (auto iter = fields_.begin(), end = --fields_.end();
+       iter != end; ++iter) {
+    os << agg_type_name(iter->agg_type) << "(";
+    if (iter->agg_operand_type == AGG_NUMBER) {
+      os << iter->number;
+    } else {
+      if (iter->agg_attr.relation_name != nullptr) {
+        os << iter->agg_attr.relation_name << ".";
+      }
+      os << iter->agg_attr.attribute_name;
+    }
+    os << ") | ";
+  }
+
+  auto back = fields_.back();
+  os << agg_type_name(back.agg_type) << "(";
+  if (back.agg_operand_type == AGG_NUMBER) {
+    os << back.number;
+  } else {
+    if (back.agg_attr.relation_name != nullptr) {
+      os << back.agg_attr.relation_name << ".";
+    }
+    os << back.agg_attr.attribute_name;
+  }
+  os << ")" << std::endl;
+}
+
+void AggTupleSet::print(std::ostream &os) const {
+  if (schema_.fields().empty()) {
+    LOG_WARN("Got empty schema");
+    return;
+  }
+
+  schema_.print(os);
+
+  for (const Tuple &item : tuples_) {
+    const std::vector<std::shared_ptr<TupleValue>> &values = item.values();
+    for (auto iter = values.begin(), end = --values.end();
+         iter != end; ++iter) {
+      (*iter)->to_string(os);
+      os << " | ";
+    }
+    values.back()->to_string(os);
+    os << std::endl;
+  }
+}
