@@ -181,4 +181,29 @@ private:
   TupleSet &tuple_set_;
 };
 
+class AggSchema {
+public:
+  AggSchema() = default;
+
+  void add(const AggDesc &agg_desc) { fields_.emplace_back(agg_desc); }
+  void print(std::ostream &os) const;
+  const std::vector<AggDesc> &fields() const { return fields_; }
+
+private:
+  std::vector<AggDesc> fields_;
+};
+
+class AggTupleSet {
+public:
+  AggTupleSet() = default;
+  AggSchema &schema() { return schema_; }
+  void add(Tuple &&tuple) {
+    tuples_.emplace_back(std::move(tuple));
+  }
+  void print(std::ostream &os) const;
+
+private:
+  AggSchema schema_;
+  std::vector<Tuple> tuples_;
+};
 #endif //__OBSERVER_SQL_EXECUTOR_TUPLE_H_
