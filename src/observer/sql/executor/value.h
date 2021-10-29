@@ -30,6 +30,8 @@ public:
 
   virtual void to_string(std::ostream &os) const = 0;
   virtual int compare(const TupleValue &other) const = 0;
+  virtual TupleValue *clone() const = 0;
+
 private:
 };
 
@@ -46,6 +48,10 @@ public:
     const IntValue & int_other = (const IntValue &)other;
     return value_ - int_other.value_;
   }
+
+  TupleValue *clone() const override { return new IntValue(value_); }
+
+  int get_value() const { return value_; }
 
 private:
   int value_;
@@ -79,6 +85,11 @@ public:
     }
     return -1;
   }
+
+  TupleValue *clone() const override { return new FloatValue(value_); }
+
+  float get_value() const { return value_; }
+
 private:
   float value_;
 };
@@ -98,6 +109,9 @@ public:
     const StringValue &string_other = (const StringValue &)other;
     return strcmp(value_.c_str(), string_other.value_.c_str());
   }
+
+  TupleValue *clone() const override { return new StringValue(value_.c_str()); }
+
 private:
   std::string value_;
 };
@@ -113,18 +127,20 @@ public:
    * @param value days since 1970.01.01
    */
   explicit DateValue(date_t value)
-    : value(value) {
+    : value_(value) {
       init_str(value);
     }
 
   void to_string(std::ostream &os) const override {
-    os << str;
+    os << str_;
   }
 
   int compare(const TupleValue &other) const override {
     const auto &date_value = static_cast<const DateValue &>(other);
-    return static_cast<int>(value - date_value.value);
+    return static_cast<int>(value_ - date_value.value_);
   }
+
+  TupleValue *clone() const override { return new DateValue(value_); }
 
   /**
    * validate string format.
@@ -145,8 +161,8 @@ private:
   static bool check_date_manually(const tm *t);
   static bool check_date_with_syscall(const tm *t);
 
-  date_t value;
-  char str[12];
+  date_t value_;
+  char str_[12];
 };
 
 #endif //__OBSERVER_SQL_EXECUTOR_VALUE_H_

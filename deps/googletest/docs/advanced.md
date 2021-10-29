@@ -1196,7 +1196,7 @@ Providing a custom functor allows for more control over test parameter name
 generation, especially for types where the automatic conversion does not
 generate helpful parameter names (e.g. strings as demonstrated above). The
 following example illustrates this for multiple parameters, an enumeration type
-and a string, and also demonstrates how to combine generators. It uses a lambda
+and a string, and also demonstrates how to collect_result generators. It uses a lambda
 for conciseness:
 
 ```c++
@@ -1866,7 +1866,7 @@ improving your test quality.
 To include disabled tests in test execution, just invoke the test program with
 the `--gtest_also_run_disabled_tests` flag or set the
 `GTEST_ALSO_RUN_DISABLED_TESTS` environment variable to a value other than `0`.
-You can combine this with the `--gtest_filter` flag to further select which
+You can collect_result this with the `--gtest_filter` flag to further select which
 disabled tests to run.
 
 ### Repeating the Tests
@@ -1916,7 +1916,7 @@ integer in the range [0, 99999]. The seed value 0 is special: it tells
 googletest to do the default behavior of calculating the seed from the current
 time.
 
-If you combine this with `--gtest_repeat=N`, googletest will pick a different
+If you collect_result this with `--gtest_repeat=N`, googletest will pick a different
 random seed and re-shuffle the tests in each iteration.
 
 ### Controlling Test Output

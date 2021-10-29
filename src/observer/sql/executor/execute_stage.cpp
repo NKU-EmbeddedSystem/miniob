@@ -13,13 +13,10 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <string>
-#include <sstream>
 #include <algorithm>
 
 #include "execute_stage.h"
 
-#include "common/io/io.h"
-#include "common/log/log.h"
 #include "common/seda/timer_stage.h"
 #include "common/lang/string.h"
 #include "session/session.h"
@@ -27,16 +24,16 @@ See the Mulan PSL v2 for more details. */
 #include "event/sql_event.h"
 #include "event/session_event.h"
 #include "event/execution_plan_event.h"
+#include "sql/executor/aggregation_executor.h"
 #include "sql/executor/execution_node.h"
-#include "sql/executor/tuple.h"
-#include "storage/common/table.h"
+#include "sql/executor/query_checker.h"
+#include "sql/executor/single_relation_select_execution_node_creator.h"
 #include "storage/default/default_handler.h"
-#include "storage/common/condition_filter.h"
-#include "storage/trx/trx.h"
+#include <cstdlib>
 
 using namespace common;
 
-RC create_selection_executor(Trx *trx, const Selects &selects, const char *db, const char *table_name, SelectExeNode &select_node, int &extra_count);
+RC create_selection_executor(Trx *trx, const Selects &selects, const char *db, const char *table_name, SelectExeNode **select_node, int &extra_count);
 
 //! Constructor
 ExecuteStage::ExecuteStage(const char *tag) : Stage(tag) {}
@@ -220,7 +217,7 @@ void end_trx_if_need(Session *session, Trx *trx, bool all_right) {
   }
 }
 
-RC create_multiple_selector(const Selects &selects, std::vector<Condition> &multiple_conditions, int &extra_count);
+RC create_multiple_selector(const Selects &selects, std::vector<Condition> &multiple_conditions);
 
 bool filter(TupleSet &res, Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &schema) {
   for (int i = 0; i < conditions.size(); ++i) {
@@ -329,6 +326,27 @@ void dfs(std::vector<TupleSet> &tuple_sets, size_t index, TupleSet &res, Tuple &
   }
 }
 
+#define RETURN_FAILURE \
+do {                  \
+  char response[] = "FAILURE\n"; \
+  session_event->set_response(response); \
+  return rc; \
+} while(0)
+
+#define ROLL_BACK_TRX \
+do {                  \
+  end_trx_if_need(session, trx, false); \
+  RETURN_FAILURE;                      \
+} while(0)
+
+#define ROLL_BACK_SELECT_EXE_NODES \
+do {                               \
+  for (SelectExeNode *& tmp_node: select_nodes) { \
+    delete tmp_node; \
+  }                                \
+  ROLL_BACK_TRX;                                   \
+} while(0)
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
@@ -338,35 +356,24 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   Trx *trx = session->current_trx();
   const Selects &selects = sql->sstr.selection;
 
-  // 把所有的表和只跟这张表关联的condition都拿出来，生成最底层的select 执行节点
-  std::vector<int> extra_counts;
-  int extra_count = 0;
-  std::vector<SelectExeNode *> select_nodes;
-  for (size_t i = 0; i < selects.relation_num; i++) {
-    const char *table_name = selects.relations[i];
-    SelectExeNode *select_node = new SelectExeNode;
-    rc = create_selection_executor(trx, selects, db, table_name, *select_node, extra_count);
-    if (rc != RC::SUCCESS) {
-      delete select_node;
-      for (SelectExeNode *& tmp_node: select_nodes) {
-        delete tmp_node;
-      }
-      end_trx_if_need(session, trx, false);
+  QueryChecker query_checker(db, selects);
+  rc = query_checker.check_fields();
+  if (rc != RC::SUCCESS) {
+    RETURN_FAILURE;
+  }
 
-      // 这里返回一个response表示查询失败了, 表不存在或者列名不存在，如果后期需要可以加上具体的失败类型
-      char response[] = "FAILURE\n";
-      session_event->set_response(response);
-      return rc;
-    }
-    extra_counts.push_back(extra_count);
-    extra_count = 0;
-    select_nodes.push_back(select_node);
+  vector<int> extra_counts;
+  vector<SelectExeNode *> select_nodes;
+  SingleRelationSelectExeNodeCreator node_creator(db, selects, trx);
+  rc = node_creator.create(select_nodes, extra_counts);
+  if (rc != RC::SUCCESS) {
+    ROLL_BACK_TRX;
   }
 
   if (select_nodes.empty()) {
     LOG_ERROR("No table given");
-    end_trx_if_need(session, trx, false);
-    return RC::SQL_SYNTAX;
+    rc = RC::SQL_SYNTAX;
+    ROLL_BACK_SELECT_EXE_NODES;
   }
 
   std::vector<TupleSet> tuple_sets;
@@ -374,13 +381,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
     TupleSet tuple_set;
     rc = node->execute(tuple_set);
     if (rc != RC::SUCCESS) {
-      for (SelectExeNode *& tmp_node: select_nodes) {
-        delete tmp_node;
-      }
-      char response[] = "FAILURE\n";
-      session_event->set_response(response);
-      end_trx_if_need(session, trx, false);
-      return rc;
+      ROLL_BACK_SELECT_EXE_NODES;
     } else {
       tuple_sets.push_back(std::move(tuple_set));
     }
@@ -402,7 +403,8 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 
   if (tuple_sets.size() == 0) {
     LOG_ERROR("no data\n");
-    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    ROLL_BACK_SELECT_EXE_NODES;
   }
 
   // 反转结果集, 因为写在后面的表会先查
@@ -410,29 +412,46 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 
   // 收集多表查询条件
   std::vector<Condition> multiple_conditions;
-  rc = create_multiple_selector(selects, multiple_conditions, extra_count);
+  rc = create_multiple_selector(selects, multiple_conditions);
   if (rc != RC::SUCCESS) {
-    char response[] = "FAILURE\n";
-    session_event->set_response(response);
-    end_trx_if_need(session, trx, false);
-    return rc;
+    ROLL_BACK_SELECT_EXE_NODES;
   }
 
   std::stringstream ss;
+  TupleSet *result_tuple_set;
+  TupleSet joined_tuple_set;
   if (tuple_sets.size() > 1) {
     // 本次查询了多张表，需要做join操作
-    TupleSet res;
     Tuple cur;
-    res.set_schema(res_schema);
+    joined_tuple_set.set_schema(res_schema);
+
     /*
      * 现在结果集已经筛选了一个表的条件，然后还需要手动筛选两个表的条件
      */
-    dfs(tuple_sets, 0, res, cur, multiple_conditions, connect_schema);
-    res.mprint(ss);
+    dfs(tuple_sets, 0, joined_tuple_set, cur, multiple_conditions, connect_schema);
 
+    result_tuple_set = &joined_tuple_set;
   } else {
     // 当前只查询一张表，直接返回结果即可
-    tuple_sets.front().print(ss);
+    result_tuple_set = &tuple_sets.front();
+  }
+
+  if (selects.agg_num > 0) {
+    AggTupleSet agg_tuple_set;
+    AggregationExecutor executor(selects, *result_tuple_set);
+
+    rc = executor.execute(agg_tuple_set);
+    if (rc != RC::SUCCESS) {
+      ROLL_BACK_SELECT_EXE_NODES;
+    }
+
+    agg_tuple_set.print(ss);
+  } else {
+    if (tuple_sets.size() > 1) {
+      result_tuple_set->mprint(ss);
+    } else {
+      result_tuple_set->print(ss);
+    }
   }
 
   for (SelectExeNode *& tmp_node: select_nodes) {
@@ -443,109 +462,10 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   return rc;
 }
 
-bool match_table(const Selects &selects, const char *table_name_in_condition, const char *table_name_to_match) {
-  if (table_name_in_condition != nullptr) {
-    return 0 == strcmp(table_name_in_condition, table_name_to_match);
-  }
-
-  return selects.relation_num == 1;
-}
-
-
-
-// 把所有的表和只跟这张表关联的condition都拿出来，生成最底层的select 执行节点
-RC create_selection_executor(Trx *trx, const Selects &selects, const char *db, const char *table_name, SelectExeNode &select_node, int &extra_count) {
-  // 列出跟这张表关联的Attr
-  TupleSchema schema;
-  Table * table = DefaultHandler::get_default().find_table(db, table_name);
-  if (nullptr == table) {
-    LOG_WARN("No such table [%s] in db [%s]", table_name, db);
-    return RC::SCHEMA_TABLE_NOT_EXIST;
-  }
-
-  // 设置结果集的列名
-  for (int i = selects.attr_num - 1; i >= 0; i--) {
-    const RelAttr &attr = selects.attributes[i];
-    if (nullptr == attr.relation_name || 0 == strcmp(table_name, attr.relation_name)) {
-      if (0 == strcmp("*", attr.attribute_name)) {
-        // 列出这张表所有字段
-        TupleSchema::from_table(table, schema);
-        break; // 没有校验，给出* 之后，再写字段的错误
-      } else {
-        // 列出这张表相关字段
-        RC rc = schema_add_field(table, attr.attribute_name, schema);
-        if (rc != RC::SUCCESS) {
-          return rc;
-        }
-      }
-    }
-  }
-
-  // 找出仅与此表相关的过滤条件, 或者都是值的过滤条件
-  std::vector<DefaultConditionFilter *> condition_filters;
-  for (size_t i = 0; i < selects.condition_num; i++) {
-    const Condition &condition = selects.conditions[i];
-    if ((condition.left_is_attr == 0 && condition.right_is_attr == 0) || // 两边都是值
-        (condition.left_is_attr == 1 && condition.right_is_attr == 0 && match_table(selects, condition.left_attr.relation_name, table_name)) ||  // 左边是属性右边是值
-        (condition.left_is_attr == 0 && condition.right_is_attr == 1 && match_table(selects, condition.right_attr.relation_name, table_name)) ||  // 左边是值，右边是属性名
-        (condition.left_is_attr == 1 && condition.right_is_attr == 1 &&
-            match_table(selects, condition.left_attr.relation_name, table_name) && match_table(selects, condition.right_attr.relation_name, table_name)) // 左右都是属性名，并且表名都符合
-        ) {
-      DefaultConditionFilter *condition_filter = new DefaultConditionFilter();
-      RC rc = condition_filter->init(*table, condition);
-      if (rc != RC::SUCCESS) {
-        delete condition_filter;
-        for (DefaultConditionFilter * &filter : condition_filters) {
-          delete filter;
-        }
-        return rc;
-      }
-      condition_filters.push_back(condition_filter);
-    }
-    else if (condition.left_is_attr == 1 && condition.right_is_attr == 1 &&
-                 strcmp(condition.left_attr.relation_name, condition.right_attr.relation_name) != 0) {
-      char *left_attr_name = condition.left_attr.attribute_name;
-      char *left_table_name = condition.left_attr.relation_name;
-      char *right_attr_name = condition.right_attr.attribute_name;
-      char *right_table_name = condition.right_attr.relation_name;
-      Table *left_table = DefaultHandler::get_default().find_table(db, left_table_name);
-      Table *right_table = DefaultHandler::get_default().find_table(db, right_table_name);
-      int left_idx = schema.index_of_field(condition.left_attr.relation_name, left_attr_name);
-
-      // 增加对应的列，不过得在自己这个表里才加
-      // 如果类型不匹配返回错误 或者增加对应的列
-      if (left_idx == -1) {
-        if (strcmp(left_table_name, table_name) == 0)
-        {
-          RC rc = schema_add_field(left_table, left_attr_name, schema);
-          if (rc != RC::SUCCESS)
-          {
-            return rc;
-          }
-          extra_count++;
-        }
-      }
-      int right_idx = schema.index_of_field(condition.right_attr.relation_name, right_attr_name);
-      if (right_idx == -1) {
-        if (strcmp(right_table_name, table_name) == 0) {
-          RC rc = schema_add_field(right_table, right_attr_name, schema);
-          if (rc != RC::SUCCESS) {
-            return rc;
-          }
-          extra_count++;
-        }
-      }
-    }
-  }
-
-  return select_node.init(trx, table, std::move(schema), std::move(condition_filters));
-}
-
-
 /*
  * 选择两边是两个表的属性，并且类型可以匹配的条件
  */
-RC create_multiple_selector(const Selects &selects, std::vector<Condition> &multiple_conditions, int &extra_count) {
+RC create_multiple_selector(const Selects &selects, std::vector<Condition> &multiple_conditions) {
   for (size_t i = 0; i < selects.condition_num; i++) {
     const Condition &condition = selects.conditions[i];
     // 左右都是表名而且不一样

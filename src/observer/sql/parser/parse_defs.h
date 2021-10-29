@@ -61,10 +61,15 @@ typedef struct _Condition {
 } Condition;
 
 typedef enum { AGG_MAX, AGG_MIN, AGG_COUNT, AGG_AVG} AggType;
+typedef enum { AGG_FIELD, AGG_STAR, AGG_NUMBER} AggOperandType;
 
 typedef struct {
   AggType agg_type;
-  const char *attribute_name; // "*" for STAR and number, filed name string for field
+  AggOperandType agg_operand_type;
+  union {
+    RelAttr agg_attr;
+    int number;                  // for case like SUM(2), value is 2
+  };
 } AggDesc;
 
 // struct of select
@@ -205,6 +210,12 @@ void condition_destroy(Condition *condition);
 
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length);
 void attr_info_destroy(AttrInfo *attr_info);
+
+void agg_desc_init_string(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, char *relation_name, char *attribute_name);
+void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, int number);
+
+const char *agg_type_name(AggType agg_type);
+const char *agg_operand_name(AggOperandType operand_type);
 
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);

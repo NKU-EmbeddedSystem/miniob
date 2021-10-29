@@ -218,6 +218,7 @@ Table *DefaultHandler::find_table(const char *dbname, const char *table_name) co
   }
   Db *db = find_db(dbname);
   if (nullptr == db) {
+    LOG_ERROR("No such db: [%s]", dbname);
     return nullptr;
   }
 

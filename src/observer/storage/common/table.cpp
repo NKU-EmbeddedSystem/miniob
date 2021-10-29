@@ -457,6 +457,7 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
 
     // validate value
     if (!value_validation(&value)) {
+      LOG_ERROR("Fail to validate record value, field type: %d value[%d] type: %d", field->type(), i, value.type);
       return RC::INVALID_ARGUMENT;
     }
   }
