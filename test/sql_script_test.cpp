@@ -136,6 +136,8 @@ int main() {
     "basic_test.sql",
     "date_test.sql",
     "identifier_test.sql",
+    "outer_join_empty_test.sql",
+    "outer_join_test.sql",
     "where_test.sql",
   });
 }

@@ -1,0 +1,14 @@
+drop table person;
+drop table phone;
+create table person(id int, name char, weight float, birthday date);
+create table phone(id int, band char, weight float, bought date);
+insert into person values(1, "tom", 55.7, '2020-10-9');
+insert into person values(2, "dan", 56.7, '2019-10-9');
+insert into person values(3, "jen", 50.7, '2018-10-9');
+insert into phone values(1, "Hua", 12.7, '2010-10-7');
+insert into phone values(2, "Xia", 22.7, '2010-9-7');
+insert into phone values(3, "App", 18.7, '2010-10-11');
+select * from person;
+select * from phone;
+select * from person, phone;
+select * from person, phone where person.id = phone.id and person.weight > 55.0;

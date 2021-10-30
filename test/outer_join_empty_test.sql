@@ -1,0 +1,10 @@
+drop table person;
+drop table phone;
+create table person(id int, name char, weight float, birthday date);
+create table phone(id int, band char, weight float, bought date);
+select * from person, phone;
+insert into person values(1, "tom", 55.7, '2020-10-9');
+insert into person values(2, "dan", 56.7, '2019-10-9');
+insert into person values(3, "jen", 50.7, '2018-10-9');
+select * from person;
+select * from person, phone;
