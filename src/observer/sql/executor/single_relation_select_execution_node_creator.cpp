@@ -166,6 +166,8 @@ RC SingleRelationSelectExeNodeCreator::condition_filter_extend_tuple_schema(
       extra_count++;
     }
   }
+
+  return RC::SUCCESS;
 }
 
 static RC schema_add_field(const Table *table, const char *field_name, TupleSchema &schema) {
