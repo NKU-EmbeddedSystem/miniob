@@ -170,6 +170,26 @@ const char *agg_operand_name(AggOperandType operand_type) {
   return operand_type_names[operand_type];
 }
 
+void order_info_init(Order *order,OrderType order_type,char *relation_name, char *attribute_name){
+  order->order_type=order_type;
+  order->order_attr.relation_name=relation_name;
+  order->order_attr.attribute_name=attribute_name;
+}
+
+const char *order_type_name(OrderType order_type){
+  static const char *order_type_names[] = {
+    [ORDER_DESC] ="desc",
+    [ORDER_ASC] = "asc"
+  };
+
+  if (order_type < ORDER_DESC || order_type >ORDER_ASC){
+    LOG_ERROR("Unsupported aggregation type: %d", order_type);
+    return nullptr;
+  }
+
+  return order_type_names[order_type];
+}
+
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr) {
   if (selects->attr_num >= MAX_NUM) {
@@ -190,6 +210,9 @@ void selects_append_conditions(Selects *selects, Condition conditions[], size_t 
     selects->conditions[i] = conditions[i];
   }
   selects->condition_num = condition_num;
+}
+void selects_append_order(Selects *selects, Order *order){
+  selects->orders[selects->order_num++] = *order;
 }
 
 void selects_destroy(Selects *selects) {
