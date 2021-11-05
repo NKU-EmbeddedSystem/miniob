@@ -65,15 +65,15 @@ RC QueryChecker::check_where_fields() {
   // check WHERE relation.attribute existence
   for (int i = 0; i < selects_.condition_num; i++) {
     const Condition &condition = selects_.conditions[i];
-    if (condition.left_is_attr == 1) {
-      rc = (this->*relattr_match_table_)(condition.left_attr, nullptr);
+    if (is_attr(&condition.left)) {
+      rc = (this->*relattr_match_table_)(condition.left.attr, nullptr);
       if (rc != RC::SUCCESS) {
         return rc;
       }
     }
 
-    if (condition.right_is_attr == 1) {
-      rc = (this->*relattr_match_table_)(condition.right_attr, nullptr);
+    if (is_attr(&condition.right)) {
+      rc = (this->*relattr_match_table_)(condition.right.attr, nullptr);
       if (rc != RC::SUCCESS) {
         return rc;
       }
