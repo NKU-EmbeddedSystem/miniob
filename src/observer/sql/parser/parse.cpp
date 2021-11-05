@@ -89,34 +89,74 @@ void value_destroy(Value *value) {
   value->data = nullptr;
 }
 
-void condition_init(Condition *condition, CompOp comp, 
-                    int left_is_attr, RelAttr *left_attr, Value *left_value,
-                    int right_is_attr, RelAttr *right_attr, Value *right_value) {
+ConditionField *condition_field_init_value(Value *value) {
+  ConditionField *condition_field = (ConditionField *)malloc(sizeof(ConditionField));
+  condition_field->type = COND_VALUE;
+  condition_field->value = *value;
+  return condition_field;
+}
+
+ConditionField *condition_field_init_attr(char *relation_name, char *attribute_name) {
+  ConditionField *condition_field = (ConditionField *)malloc(sizeof(ConditionField));
+  condition_field->type = COND_FIELD;
+  condition_field->attr.relation_name = relation_name;
+  condition_field->attr.attribute_name = attribute_name;
+  return condition_field;
+}
+
+ConditionField *condition_field_init_subquery(struct Subquery *subquery) {
+  ConditionField *condition_field = (ConditionField *)malloc(sizeof(ConditionField));
+  condition_field->type = COND_SUBQUERY;
+  condition_field->subquery = subquery;
+  return condition_field;
+}
+
+void subquery_destroy(struct Subquery *subquery) {
+
+}
+
+void condition_init(Condition *condition, ConditionField *left, ConditionField *right, CompOp comp) {
+  condition->left = *left;
+  condition->right = *right;
   condition->comp = comp;
-  condition->left_is_attr = left_is_attr;
-  if (left_is_attr) {
-    condition->left_attr = *left_attr;
-  } else {
-    condition->left_value = *left_value;
+
+  delete left;
+  delete right;
+}
+
+//void condition_init(Condition *condition, CompOp comp,
+//                    int left_is_attr, RelAttr *left_attr, Value *left_value,
+//                    int right_is_attr, RelAttr *right_attr, Value *right_value) {
+//  condition->comp = comp;
+//  condition->left_is_attr = left_is_attr;
+//  if (left_is_attr) {
+//    condition->left_attr = *left_attr;
+//  } else {
+//    condition->left_value = *left_value;
+//  }
+//
+//  condition->right_is_attr = right_is_attr;
+//  if (right_is_attr) {
+//    condition->right_attr = *right_attr;
+//  } else {
+//    condition->right_value = *right_value;
+//  }
+//}
+void condition_destroy(Condition *condition) {
+  if (is_attr(&condition->left)) {
+    relation_attr_destroy(&condition->left.attr);
+  } else if (is_value(&condition->left)){
+    value_destroy(&condition->left.value);
+  } else if (is_subquery(&condition->left)) {
+    subquery_destroy(condition->left.subquery);
   }
 
-  condition->right_is_attr = right_is_attr;
-  if (right_is_attr) {
-    condition->right_attr = *right_attr;
-  } else {
-    condition->right_value = *right_value;
-  }
-}
-void condition_destroy(Condition *condition) {
-  if (condition->left_is_attr) {
-    relation_attr_destroy(&condition->left_attr);
-  } else {
-    value_destroy(&condition->left_value);
-  }
-  if (condition->right_is_attr) {
-    relation_attr_destroy(&condition->right_attr);
-  } else {
-    value_destroy(&condition->right_value);
+  if (is_attr(&condition->right)) {
+    relation_attr_destroy(&condition->right.attr);
+  } else if (is_value(&condition->right)){
+    value_destroy(&condition->right.value);
+  } else if (is_subquery(&condition->right)) {
+    subquery_destroy(condition->right.subquery);
   }
 }
 

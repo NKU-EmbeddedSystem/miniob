@@ -38,7 +38,9 @@ typedef enum {
   GREAT_THAN,   //">"     5
   NO_OP,
   IS_OP,
-  IS_NOT_OP
+  IS_NOT_OP,
+  COND_IN,
+  NOT_IN
 } CompOp;
 
 //属性值类型
@@ -50,16 +52,35 @@ typedef struct _Value {
   void *data;     // value
 } Value;
 
+typedef enum {
+  COND_VALUE,
+  COND_FIELD,
+  COND_SUBQUERY,
+} ConditionFieldType;
+
+struct Subquery;
+
+typedef struct _ConditionField {
+  ConditionFieldType type;
+  union {
+    Value value;
+    RelAttr attr;
+    struct Subquery * subquery;
+  };
+} ConditionField;
+
 typedef struct _Condition {
-  int left_is_attr;    // TRUE if left-hand side is an attribute
-                       // 1时，操作符左边是属性名，0时，是属性值
-  Value left_value;    // left-hand side value if left_is_attr = FALSE
-  RelAttr left_attr;   // left-hand side attribute
+  ConditionField left;
+  ConditionField right;
   CompOp comp;         // comparison operator
-  int right_is_attr;   // TRUE if right-hand side is an attribute
-                       // 1时，操作符右边是属性名，0时，是属性值
-  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
-  Value right_value;   // right-hand side value if right_is_attr = FALSE
+//  int left_is_attr;    // TRUE if left-hand side is an attribute
+//                       // 1时，操作符左边是属性名，0时，是属性值
+//  Value left_value;    // left-hand side value if left_is_attr = FALSE
+//  RelAttr left_attr;   // left-hand side attribute
+//  int right_is_attr;   // TRUE if right-hand side is an attribute
+//                       // 1时，操作符右边是属性名，0时，是属性值
+//  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
+//  Value right_value;   // right-hand side value if right_is_attr = FALSE
 } Condition;
 
 typedef enum { AGG_MAX, AGG_MIN, AGG_COUNT, AGG_AVG} AggType;
@@ -97,6 +118,17 @@ typedef struct {
   Order  orders[MAX_NUM];  //order attrs for Order
   size_t order_num;
 } Selects;
+
+struct {
+  union {
+    RelAttr   attribute;    // attrs in Select clause
+    AggDesc   agg;          // descriptor for each aggregation operation
+  };
+  size_t    relation_num;           // Length of relations in Fro clause
+  char *    relations[MAX_NUM];     // relations in From clause
+  size_t    condition_num;          // Length of conditions in Where clause
+  Condition conditions[MAX_NUM];    // conditions in Where clause
+} Subquery;
 
 // struct of insert
 typedef struct {
@@ -221,8 +253,18 @@ void value_init_null(Value *value);
 int value_validation(Value *value);
 void value_destroy(Value *value);
 
-void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
-    int right_is_attr, RelAttr *right_attr, Value *right_value);
+ConditionField *condition_field_init_value(Value *value);
+ConditionField *condition_field_init_attr(char *relation_name, char *attribute_name);
+ConditionField *condition_field_init_subquery(struct Subquery *subquery);
+inline int is_value(const ConditionField *condition_field) { return condition_field->type == COND_VALUE; }
+inline int is_attr(const ConditionField *condition_field) { return condition_field->type == COND_FIELD; }
+inline int is_subquery(const ConditionField *condition_field) { return condition_field->type == COND_SUBQUERY; }
+void subquery_destroy(struct Subquery *subquery);
+
+void condition_init(Condition *condition, ConditionField *left, ConditionField *right, CompOp comp);
+
+//void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
+//    int right_is_attr, RelAttr *right_attr, Value *right_value);
 void condition_destroy(Condition *condition);
 
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int null_def);

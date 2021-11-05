@@ -67,11 +67,11 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
   AttrType type_left = UNDEFINED;
   AttrType type_right = UNDEFINED;
 
-  if (1 == condition.left_is_attr) {
+  if (is_attr(&condition.left)) {
     left.is_attr = true;
-    const FieldMeta *field_left = table_meta.field(condition.left_attr.attribute_name);
+    const FieldMeta *field_left = table_meta.field(condition.left.attr.attribute_name);
     if (nullptr == field_left) {
-      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.left_attr.attribute_name);
+      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.left.attr.attribute_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
     left.nullable_ = field_left->is_nullable();
@@ -81,19 +81,19 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
     type_left = field_left->type();
   } else {
     left.is_attr = false;
-    left.value = condition.left_value.data;  // 校验type 或者转换类型
-    type_left = condition.left_value.type;
+    left.value = condition.left.value.data;  // 校验type 或者转换类型
+    type_left = condition.left.value.type;
 
     left.nullable_ = false;
     left.attr_length = 0;
     left.attr_offset = 0;
   }
 
-  if (1 == condition.right_is_attr) {
+  if (is_attr(&condition.right)) {
     right.is_attr = true;
-    const FieldMeta *field_right = table_meta.field(condition.right_attr.attribute_name);
+    const FieldMeta *field_right = table_meta.field(condition.right.attr.attribute_name);
     if (nullptr == field_right) {
-      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.right_attr.attribute_name);
+      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.right.attr.attribute_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
     right.nullable_ = field_right->is_nullable();
@@ -104,8 +104,8 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
     right.value = nullptr;
   } else {
     right.is_attr = false;
-    right.value = condition.right_value.data;
-    type_right = condition.right_value.type;
+    right.value = condition.right.value.data;
+    type_right = condition.right.value.type;
 
     right.nullable_ = false;
     right.attr_length = 0;

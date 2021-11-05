@@ -221,10 +221,10 @@ RC create_multiple_selector(const Selects &selects, std::vector<Condition> &mult
 bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &schema) {
   for (int i = 0; i < conditions.size(); ++i) {
     Condition &condition = conditions[i];
-    char *left_attr_name = condition.left_attr.attribute_name;
-    char *right_attr_name = condition.right_attr.attribute_name;
-    int left_idx = schema.index_of_field(condition.left_attr.relation_name, left_attr_name);
-    int right_idx = schema.index_of_field(condition.right_attr.relation_name, right_attr_name);
+    char *left_attr_name = condition.left.attr.attribute_name;
+    char *right_attr_name = condition.right.attr.attribute_name;
+    int left_idx = schema.index_of_field(condition.left.attr.relation_name, left_attr_name);
+    int right_idx = schema.index_of_field(condition.right.attr.relation_name, right_attr_name);
     if (left_idx == -1 || right_idx == -1) {
       LOG_ERROR("attribute name mismatch\n");
       return false;
@@ -361,8 +361,8 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
 
   // 找到左右连接所在的列
   Condition &condition = join_conditions.front();
-  int left_index = left.schema().index_of_field(condition.left_attr.relation_name, condition.left_attr.attribute_name);
-  int right_index = right.schema().index_of_field(condition.right_attr.relation_name, condition.right_attr.attribute_name);
+  int left_index = left.schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
+  int right_index = right.schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
 
   // hash
   for (int i = 0; i < left.size(); ++i) {
@@ -391,8 +391,8 @@ TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> 
     right = &tuple_sets[i];
     std::vector<Condition> left_right_conditions;
     for (auto &condition : multiple_conditions) {
-      int left_exist = left->schema().index_of_field(condition.left_attr.relation_name, condition.left_attr.attribute_name);
-      int right_exist = right->schema().index_of_field(condition.right_attr.relation_name, condition.right_attr.attribute_name);
+      int left_exist = left->schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
+      int right_exist = right->schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
       if (left_exist >=0 && right_exist >= 0) {
         left_right_conditions.emplace_back(condition);
       }
@@ -598,8 +598,8 @@ RC create_multiple_selector(const Selects &selects, std::vector<Condition> &mult
   for (size_t i = 0; i < selects.condition_num; i++) {
     const Condition &condition = selects.conditions[i];
     // 左右都是表名而且不一样
-    if (condition.left_is_attr == 1 && condition.right_is_attr == 1 &&
-      strcmp(condition.left_attr.relation_name, condition.right_attr.relation_name) != 0) {
+    if (is_attr(&condition.left) && is_attr(&condition.right) &&
+      strcmp(condition.left.attr.relation_name, condition.right.attr.relation_name) != 0) {
       multiple_conditions.push_back(condition);
     }
   }

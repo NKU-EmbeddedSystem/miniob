@@ -446,10 +446,10 @@ bool do_unique_select(const _Value &value, Table *table, const char *field_name,
   relation_attr_init(&attr, table->name(), field_name);
   // condition
   Condition condition;
-  condition.left_attr = attr;
-  condition.left_is_attr = true;
-  condition.right_value = value;
-  condition.right_is_attr = false;
+  condition.left.attr = attr;
+  condition.left.type = COND_FIELD;
+  condition.right.value = value;
+  condition.right.type = COND_VALUE;
   condition.comp = EQUAL_TO;
 
   return do_custom_select(table, field_name, res_set, &condition);
