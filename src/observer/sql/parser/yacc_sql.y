@@ -16,9 +16,12 @@ typedef struct ParserContext {
   size_t condition_length;
   size_t from_length;
   size_t value_length;
+  size_t order_length;
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
+  Order orders[MAX_NUM];
   CompOp comp;
+  OrderType order_type;
 	char id[MAX_NUM];
 } ParserContext;
 
@@ -43,6 +46,7 @@ void yyerror(yyscan_t scanner, const char *str)
   context->from_length = 0;
   context->select_length = 0;
   context->value_length = 0;
+  context->order_length = 0;
   context->ssql->sstr.insertion.value_num = 0;
   context->ssql->sstr.errors = str;
   printf("parse sql failed. error=%s\n", str);
@@ -103,12 +107,16 @@ ParserContext *get_context(yyscan_t scanner)
         DATA
         INFILE
         UNIQUE
+		ASC
+		ORDER
+		BY
         EQ
         LT
         GT
         LE
         GE
         NE
+
 
 %union {
   struct _Attr *attr;
@@ -134,6 +142,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <condition1> condition;
 %type <value1> value;
 %type <number> number;
+%type <number> order_type;
 
 %%
 
@@ -290,6 +299,12 @@ agg_type:
 	| COUNT { $$ = AGG_COUNT; }
 	| AVG { $$ = AGG_AVG; }
 	;
+
+order_type:
+	ASC { $$ = ORDER_ASC; }
+	| DESC { $$ =ORDER_DESC; }
+	;
+
 ID_get:
 	ID 
 	{
@@ -362,7 +377,7 @@ update:			/*  update 语句的语法解析树*/
 		}
     ;
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where SEMICOLON
+    SELECT select_attr FROM ID rel_list where order SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
@@ -654,6 +669,43 @@ load_data:
 			load_data_init(&CONTEXT->ssql->sstr.load_data, $7, $4);
 		}
 		;
+
+order:
+		/* empty */
+	| ORDER BY ID order_type order_attrs {
+			Order order;
+			order_info_init(&order,CONTEXT->order_type,NULL,$3);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	| ORDER BY ID DOT ID order_type order_attrs {
+			Order order;
+			order_info_init(&order,CONTEXT->order_type,$3,$5);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+		;
+order_attrs:
+		/* empty */
+	| COMMA ID order_type order_attrs{
+			Order order;
+			order_info_init(&order,CONTEXT->order_type,NULL,$2);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	| COMMA ID DOT ID order_type order_attrs{
+			Order order;
+			order_info_init(&order,CONTEXT->order_type,$2,$4);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	;
+order_type:
+	/* empty */
+		{ CONTEXT->order_type = ORDER_ASC;}
+	| ASC
+		{ CONTEXT->order_type = ORDER_ASC;}
+	| DESC
+		{ CONTEXT->order_type = ORDER_DESC;}
+	;
+	
+
 %%
 //_____________________________________________________________________
 extern void scan_string(const char *str, yyscan_t scanner);

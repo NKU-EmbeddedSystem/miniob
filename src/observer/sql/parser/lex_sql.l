@@ -77,6 +77,9 @@ QUOTE            [\'\"]
 [Dd][Aa][Tt][Aa]	                       RETURN_TOKEN(DATA);
 [Ii][Nn][Ff][Ii][Ll][Ee]                 RETURN_TOKEN(INFILE);
 [Uu][Nn][Ii][Qq][Uu][Ee]                 RETURN_TOKEN(UNIQUE);
+[Aa][Ss][Cc]                       RETURN_TOKEN(ASC);
+[Oo][Rr][Dd][Ee][Rr]			RETURN_TOKEN(ORDER);
+[Bb][Yy]                        RETURN_TOKEN(BY);
 {ID}							                       yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("								                       RETURN_TOKEN(LBRACE);
 ")"								                       RETURN_TOKEN(RBRACE);
