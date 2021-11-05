@@ -72,6 +72,14 @@ typedef struct {
   };
 } AggDesc;
 
+typedef enum { ORDER_DESC,ORDER_ASC} OrderType;
+
+//struct of order
+typedef struct {
+  OrderType order_type;
+  RelAttr order_attr;
+}Order;
+
 // struct of select
 typedef struct {
   size_t    attr_num;               // Length of attrs in Select clause
@@ -82,6 +90,8 @@ typedef struct {
   char *    relations[MAX_NUM];     // relations in From clause
   size_t    condition_num;          // Length of conditions in Where clause
   Condition conditions[MAX_NUM];    // conditions in Where clause
+  Order  orders[MAX_NUM];  //order attrs for Order
+  size_t order_num;
 } Selects;
 
 // struct of insert
@@ -216,6 +226,10 @@ void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType ag
 
 const char *agg_type_name(AggType agg_type);
 const char *agg_operand_name(AggOperandType operand_type);
+
+void order_info_init(Order *order,OrderType order_type,char *relation_name, char *attribute_name);
+void selects_append_orders(Selects *selects, Order *order);
+
 
 void selects_init(Selects *selects, ...);
 void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
