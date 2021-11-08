@@ -394,6 +394,64 @@ static bool type_match(AttrType field_type, Value *value) {
   return false;
 }
 
+/**
+ * @param table 表指针
+ * @param field_name 列名
+ * @param res_set 结果集引用
+ * @param condition select条件的指针
+ * @return true表示没有错误，false表示有错误
+ */
+bool do_custom_select(Table *table, const char *field_name, TupleSet &res_set, Condition *condition) {
+  RC rc;
+  // filter
+  std::vector<DefaultConditionFilter *> condition_filters;
+  if (condition != nullptr) {
+    auto *condition_filter = new DefaultConditionFilter();
+    rc = condition_filter->init(*table, *condition);
+    if (rc != RC::SUCCESS)
+      return false;
+    condition_filters.push_back(condition_filter);
+  }
+
+  // schema
+  TupleSchema schema;
+  rc = schema_add_field(table, field_name, schema);
+  if (rc != RC::SUCCESS)
+    return false;
+
+  // select node
+  auto *select_node = new SelectExeNode;
+  rc = select_node->init(nullptr, table, std::move(schema), std::move(condition_filters));
+  if (rc != RC::SUCCESS)
+    return false;
+  select_node->execute(res_set);
+
+  return true;
+}
+
+/**
+ * 用于insert时 unique index表中是否有一样的值
+ * @param value unique index所在的列的值
+ * @param table 表指针
+ * @param field_name 列名
+ * @param res_set 结果集
+ * @return
+ */
+bool do_unique_select(const Value &value, Table *table, const char *field_name, TupleSet &res_set) {
+  // attr
+  RelAttr attr;
+  relation_attr_init(&attr, table->name(), field_name);
+  // condition
+  Condition condition;
+  condition.left_attr = attr;
+  condition.left_is_attr = true;
+  condition.right_value = value;
+  condition.right_is_attr = false;
+  condition.comp = EQUAL_TO;
+
+  return do_custom_select(table, field_name, res_set, &condition);
+}
+
 // 加在make record这里会好一点
 bool Table::find_if_exist_unique_record(int value_num, const Value *values) {
   for (int i = 0; i < value_num; ++i) {
@@ -405,36 +463,13 @@ bool Table::find_if_exist_unique_record(int value_num, const Value *values) {
     }
     Index *index = find_index(index_meta->name());
     if (std::find(unique_indexes_.begin(), unique_indexes_.end(), index) != unique_indexes_.begin()) {
-     // attr
-     RelAttr attr;
-     relation_attr_init(&attr,name(), field_meta->name());
-
-     // condition
-     Condition condition;
-     condition.left_attr = attr;
-     condition.left_is_attr = true;
-     condition.right_value = value;
-     condition.right_is_attr = false;
-     condition.comp = EQUAL_TO;
-
-     // filter
-     std::vector<DefaultConditionFilter *> condition_filters;
-     auto *condition_filter = new DefaultConditionFilter();
-     RC rc = condition_filter->init(*this, condition);
-     condition_filters.push_back(condition_filter);
-
-     TupleSchema schema;
-     rc = schema_add_field(this, field_meta->name(), schema);
-     // select node
-     auto *select_node = new SelectExeNode;
-     rc = select_node->init(nullptr, this, std::move(schema), std::move(condition_filters));
-     TupleSet res_set;
-     select_node->execute(res_set);
-     if (!res_set.is_empty())
-       return true;
+      TupleSet res;
+      bool success = do_unique_select(value, this, field_meta->name(), res);
+      if (!success || res.size() > 0) {
+        return true;
+      }
     }
   }
-
   return false;
 }
 
@@ -730,6 +765,18 @@ RC Table::create_unique_index(Trx *trx, const char *index_name, const char *attr
   if (!field_meta) {
     return RC::SCHEMA_FIELD_MISSING;
   }
+
+  // 查找当前列是否有重复字段
+  TupleSet res;
+  do_custom_select(this, field_meta->name(), res, nullptr);
+  const auto tuples = res.tuples();
+  for (int i = 0; i < tuples.size(); ++i) {
+    for (int j = i + 1; j < tuples.size(); ++j) {
+      if (tuples[i].get(0).compare(tuples[j].get(0)) == 0) {
+        return RC::SCHEMA_INDEX_EXIST;
+      } // end if
+    } // end for j
+  } // end for i
 
   IndexMeta new_index_meta;
   RC rc = new_index_meta.init(index_name, *field_meta);
