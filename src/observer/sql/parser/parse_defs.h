@@ -40,7 +40,7 @@ typedef enum {
 } CompOp;
 
 //属性值类型
-typedef enum { UNDEFINED, CHARS, INTS, DATE, FLOATS } AttrType;
+typedef enum { UNDEFINED, CHARS, INTS, DATE, FLOATS} AttrType;
 
 //属性值
 typedef struct _Value {
@@ -121,6 +121,7 @@ typedef struct {
   char *name;     // Attribute name
   AttrType type;  // Type of attribute
   size_t length;  // Length of attribute
+  int null_type; // Type of nullable
 } AttrInfo;
 
 // struct of create_table
@@ -218,7 +219,7 @@ void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr
     int right_is_attr, RelAttr *right_attr, Value *right_value);
 void condition_destroy(Condition *condition);
 
-void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length);
+void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int null_def);
 void attr_info_destroy(AttrInfo *attr_info);
 
 void agg_desc_init_string(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, char *relation_name, char *attribute_name);
