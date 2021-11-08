@@ -60,6 +60,10 @@ void Tuple::add(date_t value) {
   add(new DateValue(value));
 }
 
+void Tuple::add_null() {
+  add(new NullValue());
+}
+
 void Tuple::pop_back() {
   values_.pop_back();
 }
@@ -281,30 +285,43 @@ TupleRecordConverter::TupleRecordConverter(Table *table, TupleSet &tuple_set) :
 }
 
 void TupleRecordConverter::add_record(const char *record) {
+  char *cur = const_cast<char *>(record);
+
   const TupleSchema &schema = tuple_set_.schema();
   Tuple tuple;
   const TableMeta &table_meta = table_->table_meta();
   for (const TupleField &field : schema.fields()) {
     const FieldMeta *field_meta = table_meta.field(field.field_name());
     assert(field_meta != nullptr);
+    bool is_null = false;
+    if (field_meta->is_nullable()) {
+      is_null = *(int *) (cur + field_meta->offset());
+      cur += 4;
+    }
+
+    if (is_null) {
+      tuple.add_null();
+      continue;
+    }
+
     switch (field_meta->type()) {
       case INTS: {
-        int value = *(int*)(record + field_meta->offset());
+        int value = *(int*)(cur + field_meta->offset());
         tuple.add(value);
       }
       break;
       case FLOATS: {
-        float value = *(float *)(record + field_meta->offset());
+        float value = *(float *)(cur + field_meta->offset());
         tuple.add(value);
       }
         break;
       case CHARS: {
-        const char *s = record + field_meta->offset();  // 现在当做Cstring来处理
+        const char *s = cur + field_meta->offset();  // 现在当做Cstring来处理
         tuple.add(s, strlen(s));
       }
       break;
       case DATE: {
-        date_t value = *reinterpret_cast<const date_t *>(record + field_meta->offset());
+        date_t value = *reinterpret_cast<const date_t *>(cur + field_meta->offset());
         tuple.add(value);
       }
       break;

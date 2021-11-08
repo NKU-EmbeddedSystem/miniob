@@ -514,8 +514,22 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
 
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
+    LOG_INFO("field %s, len %d\n", field->name(), field->len());
     const Value &value = values[i];
-    memcpy(record + field->offset(), value.data, field->len());
+    if (field->is_nullable()) {
+      // 增加4个字节用来表示是否为空
+      int *null_flag = reinterpret_cast<int *>(record + field->offset());
+      if (value.type == NULLS) {
+        *null_flag = 1;
+      }
+      else {
+        *null_flag = 0;
+        memcpy(record + field->offset() + 4, value.data, field->len() - 4);
+      }
+    }
+    else {
+      memcpy(record + field->offset(), value.data, field->len());
+    }
   }
 
   record_out = record;

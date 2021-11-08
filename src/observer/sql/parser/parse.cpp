@@ -62,8 +62,7 @@ void value_init_date(Value *value, date_t v) {
 
 void value_init_null(Value *value) {
   value->type = NULLS;
-  value->data = malloc(sizeof(int));
-  *(int*)value->data = 0;
+  value->data = nullptr;
 }
 
 int value_validation(Value *value) {
