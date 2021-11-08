@@ -437,7 +437,7 @@ bool do_custom_select(Table *table, const char *field_name, TupleSet &res_set, C
  * @param res_set 结果集
  * @return
  */
-bool do_unique_select(const Value &value, Table *table, const char *field_name, TupleSet &res_set) {
+bool do_unique_select(const _Value &value, Table *table, const char *field_name, TupleSet &res_set) {
   // attr
   RelAttr attr;
   relation_attr_init(&attr, table->name(), field_name);
@@ -457,16 +457,13 @@ bool Table::find_if_exist_unique_record(int value_num, const Value *values) {
   for (int i = 0; i < value_num; ++i) {
     Value &value = const_cast<Value &>(values[i]);
     const FieldMeta* field_meta = table_meta_.field(i + table_meta_.sys_field_num());
-    IndexMeta *index_meta = const_cast<IndexMeta *>(table_meta_.find_index_by_field(field_meta->name()));
-    if (index_meta == nullptr) {
-      continue;
-    }
-    Index *index = find_index(index_meta->name());
-    if (std::find(unique_indexes_.begin(), unique_indexes_.end(), index) != unique_indexes_.begin()) {
-      TupleSet res;
-      bool success = do_unique_select(value, this, field_meta->name(), res);
-      if (!success || res.size() > 0) {
-        return true;
+    for (const Index *index : unique_indexes_) {
+      if (strcmp(index->index_meta().field(), field_meta->name()) == 0) {
+        TupleSet res;
+        bool success = do_unique_select(value, this, field_meta->name(), res);
+        if (!success || res.size() > 0) {
+          return true;
+        }
       }
     }
   }
@@ -664,7 +661,7 @@ public:
     return index_->insert_entry(record->data, &record->rid);
   }
 private:
-  Index * index_;
+  Index *index_;
 };
 
 static RC insert_index_record_reader_adapter(Record *record, void *context) {
@@ -1058,6 +1055,14 @@ RC Table::commit_update(Trx *trx, const RID &rid) {
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid) {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
+    rc = index->insert_entry(record, &rid);
+    if (rc != RC::SUCCESS) {
+      break;
+    }
+  }
+
+  // unique index
+  for (Index *index : unique_indexes_) {
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       break;
