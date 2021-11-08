@@ -165,4 +165,20 @@ private:
   char str_[12];
 };
 
+class NullValue : public TupleValue {
+public:
+    NullValue() = default;
+    int compare(const TupleValue &other) const override{
+      return false;
+    }
+
+    void to_string(std::ostream &os) const override {
+      os << "null";
+    }
+
+    TupleValue * clone() const override {
+      return new NullValue();
+    }
+};
+
 #endif //__OBSERVER_SQL_EXECUTOR_VALUE_H_

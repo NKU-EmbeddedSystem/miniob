@@ -59,8 +59,11 @@ public:
     return values_[index];
   }
 
+    void add_null();
+
 private:
   std::vector<std::shared_ptr<TupleValue>>  values_;
+
 };
 
 class TupleField {
