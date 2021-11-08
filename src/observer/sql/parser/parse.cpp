@@ -60,6 +60,12 @@ void value_init_date(Value *value, date_t v) {
   memcpy(value->data, &v, sizeof(v));
 }
 
+void value_init_null(Value *value) {
+  value->type = NULLS;
+  value->data = malloc(sizeof(int));
+  *(int*)value->data = 0;
+}
+
 int value_validation(Value *value) {
   switch (value->type) {
     case DATE: {

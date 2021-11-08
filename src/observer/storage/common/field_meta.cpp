@@ -74,6 +74,10 @@ RC FieldMeta::init(const char *name, AttrType attr_type, int attr_offset, int at
   return RC::SUCCESS;
 }
 
+bool FieldMeta::is_nullable() const{
+  return nullable;
+}
+
 const char *FieldMeta::name() const {
   return name_.c_str();
 }
@@ -98,7 +102,8 @@ void FieldMeta::desc(std::ostream &os) const {
   os << "field name=" << name_
      << ", type=" << attr_type_to_string(attr_type_)
      << ", len=" << attr_len_
-     << ", visible=" << (visible_ ? "yes" : "no");
+     << ", visible=" << (visible_ ? "yes" : "no")
+     << ", nullable=" << (nullable ? "yes" : "no");
 }
 
 void FieldMeta::to_json(Json::Value &json_value) const {

@@ -334,22 +334,15 @@ insert_value_list:
 
     		}
     ;
-insert:				/*insert   语句的语法解析树*/
+insert:	/*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE insert_value_list SEMICOLON
 		{
-			// CONTEXT->values[CONTEXT->value_length++] = *$6;
-
 			CONTEXT->ssql->flag=SCF_INSERT;//"insert";
-			// CONTEXT->ssql->sstr.insertion.relation_name = $3;
-			// CONTEXT->ssql->sstr.insertion.value_num = CONTEXT->value_length;
-			// for(i = 0; i < CONTEXT->value_length; i++){
-			// 	CONTEXT->ssql->sstr.insertion.values[i] = CONTEXT->values[i];
-      // }
 			inserts_init(&CONTEXT->ssql->sstr.insertion, $3, CONTEXT->values, CONTEXT->value_length);
 
-      //临时变量清零
-      CONTEXT->value_length=0;
-    }
+      			//临时变量清零
+      			CONTEXT->value_length=0;
+    		}
 
 value_list:
     /* empty */
@@ -358,16 +351,23 @@ value_list:
 	  }
     ;
 value:
-    NUMBER{	
-  		value_init_integer(&CONTEXT->values[CONTEXT->value_length++], $1);
+    NUMBER
+    		{
+  			value_init_integer(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
-    |FLOAT{
-  		value_init_float(&CONTEXT->values[CONTEXT->value_length++], $1);
+    |FLOAT
+    		{
+  			value_init_float(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
-    |SSS {
+    |SSS
+    		{
 			$1 = substr($1,1,strlen($1)-2);
-  		value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
+  			value_init_string(&CONTEXT->values[CONTEXT->value_length++], $1);
 		}
+    | NULL_T
+    		{
+    			value_init_null(&CONTEXT->values[CONTEXT->value_length++]);
+    		}
     ;
     
 delete:		/*  delete 语句的语法解析树*/
