@@ -128,7 +128,7 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
   return rc;
 }
 
-RC open_index(TableMeta &table_meta_, std::vector<Index*> indexes_, const char* base_dir, const char *name) {
+RC open_index(TableMeta &table_meta_, std::vector<Index*> &indexes_, const char* base_dir, const char *name) {
   RC rc = RC::SUCCESS;
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
@@ -218,6 +218,7 @@ RC Table::drop_all_indexes() {
       return RC::IOERR;
     }
   }
+  indexes_.clear();
   return RC::SUCCESS;
 }
 
@@ -237,6 +238,7 @@ RC Table::drop_all_unique_indexes() {
       return RC::IOERR;
     }
   }
+  unique_indexes_.clear();
   return RC::SUCCESS;
 }
 
