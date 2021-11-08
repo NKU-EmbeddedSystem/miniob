@@ -285,8 +285,7 @@ TupleRecordConverter::TupleRecordConverter(Table *table, TupleSet &tuple_set) :
 }
 
 void TupleRecordConverter::add_record(const char *record) {
-  char *cur = const_cast<char *>(record);
-
+  int offset = 0;
   const TupleSchema &schema = tuple_set_.schema();
   Tuple tuple;
   const TableMeta &table_meta = table_->table_meta();
@@ -295,8 +294,11 @@ void TupleRecordConverter::add_record(const char *record) {
     assert(field_meta != nullptr);
     bool is_null = false;
     if (field_meta->is_nullable()) {
-      is_null = *(int *) (cur + field_meta->offset());
-      cur += 4;
+      is_null = *(int *) (record + field_meta->offset());
+      offset = 4;
+    }
+    else {
+      offset = 0;
     }
 
     if (is_null) {
@@ -306,22 +308,22 @@ void TupleRecordConverter::add_record(const char *record) {
 
     switch (field_meta->type()) {
       case INTS: {
-        int value = *(int*)(cur + field_meta->offset());
+        int value = *(int*)(record + field_meta->offset() + offset);
         tuple.add(value);
       }
       break;
       case FLOATS: {
-        float value = *(float *)(cur + field_meta->offset());
+        float value = *(float *)(record + field_meta->offset() + offset);
         tuple.add(value);
       }
         break;
       case CHARS: {
-        const char *s = cur + field_meta->offset();  // 现在当做Cstring来处理
+        const char *s = record + field_meta->offset() + offset;  // 现在当做Cstring来处理
         tuple.add(s, strlen(s));
       }
       break;
       case DATE: {
-        date_t value = *reinterpret_cast<const date_t *>(cur + field_meta->offset());
+        date_t value = *reinterpret_cast<const date_t *>(record + field_meta->offset() + offset);
         tuple.add(value);
       }
       break;
