@@ -363,7 +363,8 @@ RC Table::insert_record(Trx *trx, int value_num, const Value *values) {
       rollback_insert(trx, rid);
     }
   }
-  // clear flag
+
+  // clear multiple insertion flag
   multi_insertion_flag = false;
   rollback_rids.clear();
   return rc;
@@ -481,10 +482,18 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     Value &value = const_cast<Value &>(values[i]);
+
+    // match null type
+    if (!field->is_nullable() && value.type == NULLS) {
+      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+
     if (!type_match(field->type(), &value)) {
+      if (!field->is_nullable() || value.type != NULLS) {
         LOG_ERROR("Invalid value type. field name=%s, type=%d, but given=%d",
                   field->name(), field->type(), value.type);
         return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
     }
 
     // validate value

@@ -30,6 +30,7 @@ public:
   ~FieldMeta() = default;
 
   RC init(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, bool null_def);
+  bool is_nullable() const;
 
 public:
   const char *name() const;
