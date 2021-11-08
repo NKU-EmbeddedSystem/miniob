@@ -69,6 +69,8 @@ ParserContext *get_context(yyscan_t scanner)
 %token  SEMICOLON
         CREATE
         DROP
+        NULL_T
+        NULLABLE_T
         TABLE
         TABLES
         INDEX
@@ -107,15 +109,16 @@ ParserContext *get_context(yyscan_t scanner)
         DATA
         INFILE
         UNIQUE
-		ASC
-		ORDER
-		BY
+	ASC
+	ORDER
+	BY
         EQ
         LT
         GT
         LE
         GE
         NE
+        NOT
 
 
 %union {
@@ -138,6 +141,7 @@ ParserContext *get_context(yyscan_t scanner)
 //非终结符
 
 %type <number> type;
+%type <number> null_def;
 %type <number> agg_type;
 %type <condition1> condition;
 %type <value1> value;
@@ -263,7 +267,7 @@ attr_def:
     ID_get type LBRACE number RBRACE 
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, $4);
+			attr_info_init(&attribute, CONTEXT->id, $2, $4, 0);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name =(char*)malloc(sizeof(char));
 			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
@@ -271,10 +275,10 @@ attr_def:
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].length = $4;
 			CONTEXT->value_length++;
 		}
-    |ID_get type
+    |ID_get type null_def
 		{
 			AttrInfo attribute;
-			attr_info_init(&attribute, CONTEXT->id, $2, 4);
+			attr_info_init(&attribute, CONTEXT->id, $2, 4, $3);
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
 			// CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name=(char*)malloc(sizeof(char));
 			// strcpy(CONTEXT->ssql->sstr.create_table.attributes[CONTEXT->value_length].name, CONTEXT->id); 
@@ -283,9 +287,19 @@ attr_def:
 			CONTEXT->value_length++;
 		}
     ;
+
+
+null_def:
+	  { $$ = 0; } // empty
+	| NULLABLE_T { $$ = 1; }
+	| NOT NULL_T { $$ = 0; }
+	;
+
+
 number:
 		NUMBER {$$ = $1;}
 		;
+
 type:
 	INT_T { $$=INTS; }
        | STRING_T { $$=CHARS; }
