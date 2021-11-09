@@ -595,7 +595,7 @@ union yyalloc
 /* YYNNTS -- Number of nonterminals.  */
 #define YYNNTS  41
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  108
+#define YYNRULES  105
 /* YYNSTATES -- Number of states.  */
 #define YYNSTATES  239
 
@@ -662,7 +662,7 @@ static const yytype_int16 yyrline[] =
      437,   443,   450,   452,   459,   468,   470,   476,   482,   488,
      496,   498,   503,   505,   510,   512,   518,   539,   559,   579,
      601,   622,   643,   665,   666,   667,   668,   669,   670,   674,
-     681,   683,   688,   694,   696,   701,   709,   710,   712
+     681,   683,   688,   694,   696,   701
 };
 #endif
 
@@ -767,11 +767,11 @@ static const yytype_int8 yydefact[] =
       81,     0,     0,     0,     0,     0,    88,    86,    89,    87,
       84,     0,     0,    35,    33,    40,     0,     0,     0,     0,
       71,     0,    64,    56,    53,     0,     0,    85,    63,    99,
-       0,    30,     0,     0,     0,     0,   106,    57,     0,     0,
+       0,    30,     0,     0,     0,     0,     0,    57,     0,     0,
        0,    90,    91,    36,    31,    75,     0,    75,    75,    51,
        0,    50,   103,     0,    55,     0,    78,     0,    76,    77,
-     106,     0,   101,    56,    92,    75,   103,   106,     0,    79,
-     102,     0,   103,    53,   106,   104,    54,   103,   105
+       0,     0,   101,    56,    92,    75,   103,     0,     0,    79,
+     102,     0,   103,    53,     0,   104,    54,   103,   105
 };
 
 /* YYPGOTO[NTERM-NUM].  */
@@ -896,7 +896,7 @@ static const yytype_int8 yyr1[] =
       93,    93,    94,    94,    94,    95,    95,    95,    95,    95,
       96,    96,    97,    97,    98,    98,    99,    99,    99,    99,
       99,    99,    99,   100,   100,   100,   100,   100,   100,   101,
-     102,   102,   102,   103,   103,   103,    84,    84,    84
+     102,   102,   102,   103,   103,   103
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
@@ -912,7 +912,7 @@ static const yytype_int8 yyr2[] =
        5,     7,     0,     3,     5,     0,     6,     6,     6,     8,
        0,     3,     0,     3,     0,     3,     3,     3,     3,     3,
        5,     5,     7,     1,     1,     1,     1,     1,     1,     8,
-       0,     5,     7,     0,     4,     6,     0,     1,     1
+       0,     5,     7,     0,     4,     6
 };
 
 
@@ -2139,26 +2139,8 @@ yyreduce:
 #line 2140 "yacc_sql.tab.c"
     break;
 
-  case 106: /* order_type: %empty  */
-#line 709 "yacc_sql.y"
-                { CONTEXT->order_type = ORDER_ASC;}
-#line 2146 "yacc_sql.tab.c"
-    break;
 
-  case 107: /* order_type: ASC  */
-#line 711 "yacc_sql.y"
-                { CONTEXT->order_type = ORDER_ASC;}
-#line 2152 "yacc_sql.tab.c"
-    break;
-
-  case 108: /* order_type: DESC  */
-#line 713 "yacc_sql.y"
-                { CONTEXT->order_type = ORDER_DESC;}
-#line 2158 "yacc_sql.tab.c"
-    break;
-
-
-#line 2162 "yacc_sql.tab.c"
+#line 2144 "yacc_sql.tab.c"
 
       default: break;
     }
@@ -2351,7 +2333,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 717 "yacc_sql.y"
+#line 708 "yacc_sql.y"
 
 //_____________________________________________________________________
 extern void scan_string(const char *str, yyscan_t scanner);

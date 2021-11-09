@@ -704,15 +704,6 @@ order_attrs:
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 	;
-order_type:
-	/* empty */
-		{ CONTEXT->order_type = ORDER_ASC;}
-	| ASC
-		{ CONTEXT->order_type = ORDER_ASC;}
-	| DESC
-		{ CONTEXT->order_type = ORDER_DESC;}
-	;
-	
 
 %%
 //_____________________________________________________________________
