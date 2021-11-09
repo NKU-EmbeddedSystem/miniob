@@ -140,13 +140,14 @@ ParserContext *get_context(yyscan_t scanner)
 %token <string> STRING_V
 //非终结符
 
-%type <number> type;
-%type <number> null_def;
-%type <number> agg_type;
-%type <condition1> condition;
-%type <value1> value;
-%type <number> number;
-%type <number> order_type;
+%type <number> type
+%type <number> null_def
+%type <number> agg_type
+%type <condition1> condition
+%type <value1> value
+%type <number> number
+%type <number> order_type
+%type <string> ID_list
 
 %%
 
@@ -229,19 +230,29 @@ desc_table:
     ;
 
 create_index:		/*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE SEMICOLON 
+    CREATE INDEX ID ON ID LBRACE ID_list RBRACE SEMICOLON
 		{
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
 			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, $7);
 		}
-    | CREATE UNIQUE INDEX ID ON ID LBRACE ID RBRACE SEMICOLON
+    | CREATE UNIQUE INDEX ID ON ID_list LBRACE ID RBRACE SEMICOLON
     		{
 			CONTEXT->ssql->flag = SCF_CREATE_UNIQUE_INDEX;// "create_unique_index";
 			create_index_init(&CONTEXT->ssql->sstr.create_index, $4, $6, $8);
     		}
     ;
 
-drop_index:			/*drop index 语句的语法解析树*/
+ID_list:
+    ID 		{
+    			$$ = $1;
+    		}
+    | ID COMMA ID_list
+    		{
+			$$ = $1;
+    		}
+    ;
+
+drop_index: /*drop index 语句的语法解析树*/
     DROP INDEX ID  SEMICOLON 
 		{
 			CONTEXT->ssql->flag=SCF_DROP_INDEX;//"drop_index";
@@ -662,7 +673,7 @@ condition:
     ;
 
 comOp:
-  	  EQ { CONTEXT->comp = EQUAL_TO; }
+    EQ { CONTEXT->comp = EQUAL_TO; }
     | LT { CONTEXT->comp = LESS_THAN; }
     | GT { CONTEXT->comp = GREAT_THAN; }
     | LE { CONTEXT->comp = LESS_EQUAL; }
