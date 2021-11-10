@@ -42,6 +42,7 @@ int page_fix_size() {
 int page_record_capacity(int page_size, int record_size) {
   // (record_capacity * record_size) + record_capacity/8 + 1 <= (page_size - fix_size)
   // ==> record_capacity = ((page_size - fix_size) - 1) / (record_size + 0.125)
+  LOG_ERROR("page size : %d, fix_size : %d, record_size : %d\n", page_size, page_fix_size(), record_size);
   return (int)((page_size - page_fix_size() - 1) / (record_size + 0.125));
 }
 
@@ -142,6 +143,7 @@ RC RecordPageHandler::deinit() {
 RC RecordPageHandler::insert_record(const char *data, RID *rid) {
 
   if (page_header_->record_num == page_header_->record_capacity) {
+    LOG_ERROR("record_num : %d, capacity : %d\n", page_header_->record_num, page_header_->record_capacity);
     LOG_WARN("Page is full, file_id:page_num %d:%d.", file_id_,
               page_handle_.frame->page.page_num);
     return RC::RECORD_NOMEM;
@@ -315,6 +317,11 @@ bool RecordPageHandler::is_full() const {
   return page_header_->record_num >= page_header_->record_capacity;
 }
 
+int RecordPageHandler::get_page_size() const {
+  int page_size = sizeof(page_handle_.frame->page.data);
+  return page_size;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 RecordFileHandler::RecordFileHandler() :
@@ -345,75 +352,87 @@ void RecordFileHandler::close() {
 }
 
 RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid) {
-  RC ret = RC::SUCCESS;
-  // 找到没有填满的页面 
-  int page_count = 0;
-  if ((ret = disk_buffer_pool_->get_page_count(file_id_, &page_count)) != RC::SUCCESS) {
-    LOG_ERROR("Failed to get page count while inserting record");
-    return ret;
-  }
-
-  PageNum current_page_num = record_page_handler_.get_page_num();
-  if (current_page_num < 0) {
-    if (page_count >= 2) { // 当前buffer pool 有页面时才尝试加载第一页
-      // 参考diskBufferPool，pageNum从1开始
-      if ((ret = record_page_handler_.init(*disk_buffer_pool_, file_id_, 1)) != RC::SUCCESS) {
-        LOG_ERROR("Failed to init record page handler.ret=%d", ret);
-        return ret;
-      }
-      current_page_num = record_page_handler_.get_page_num();
-    } else {
-      current_page_num = 0;
-    }
-  }
-
-  bool page_found = false;
-  for (int i = 0; i < page_count; i++) {
-    current_page_num = (current_page_num + i) % page_count; // 从当前打开的页面开始查找
-    if (current_page_num == 0) {
-      continue;
-    }
-    if (current_page_num != record_page_handler_.get_page_num()) {
-      record_page_handler_.deinit();
-      ret = record_page_handler_.init(*disk_buffer_pool_, file_id_, current_page_num);
-      if (ret != RC::SUCCESS && ret != RC::BUFFERPOOL_INVALID_PAGE_NUM) {
-        LOG_ERROR("Failed to init record page handler. page number is %d. ret=%d:%s", current_page_num, ret, strrc(ret));
-        return ret;
-      }
-    }
-
-    if (!record_page_handler_.is_full()) {
-      page_found = true;
-      break;
-    }
-  }
-
-  // 找不到就分配一个新的页面
-  if (!page_found) {
-    BPPageHandle page_handle;
-    if ((ret = disk_buffer_pool_->allocate_page(file_id_, &page_handle)) != RC::SUCCESS) {
-      LOG_ERROR("Failed to allocate page while inserting record. file_it:%d, ret:%d",
-                file_id_, ret);
+  int res = record_size;
+  int cur = 0;
+  int fixed_size = record_page_handler_.get_page_size() - page_fix_size() - 16;
+  while (res > 0) {
+    RC ret = RC::SUCCESS;
+    int can_be_allocated = 0;
+    // 找到没有填满的页面
+    int page_count = 0;
+    if ((ret = disk_buffer_pool_->get_page_count(file_id_, &page_count)) != RC::SUCCESS) {
+      LOG_ERROR("Failed to get page count while inserting record");
       return ret;
     }
 
-    current_page_num = page_handle.frame->page.page_num;
-    record_page_handler_.deinit();
-    ret = record_page_handler_.init_empty_page(*disk_buffer_pool_, file_id_, current_page_num, record_size);
-    if (ret != RC::SUCCESS) {
-      LOG_ERROR("Failed to init empty page. file_id:%d, ret:%d", file_id_, ret);
+    PageNum current_page_num = record_page_handler_.get_page_num();
+    if (current_page_num < 0) {
+      if (page_count >= 2) { // 当前buffer pool 有页面时才尝试加载第一页
+        // 参考diskBufferPool，pageNum从1开始
+        if ((ret = record_page_handler_.init(*disk_buffer_pool_, file_id_, 1)) != RC::SUCCESS) {
+          LOG_ERROR("Failed to init record page handler.ret=%d", ret);
+          return ret;
+        }
+        current_page_num = record_page_handler_.get_page_num();
+      } else {
+        current_page_num = 0;
+      }
+    }
+
+    bool page_found = false;
+    for (int i = 0; i < page_count; i++) {
+      current_page_num = (current_page_num + i) % page_count; // 从当前打开的页面开始查找
+      if (current_page_num == 0) {
+        continue;
+      }
+      if (current_page_num != record_page_handler_.get_page_num()) {
+        record_page_handler_.deinit();
+        ret = record_page_handler_.init(*disk_buffer_pool_, file_id_, current_page_num);
+        if (ret != RC::SUCCESS && ret != RC::BUFFERPOOL_INVALID_PAGE_NUM) {
+          LOG_ERROR("Failed to init record page handler. page number is %d. ret=%d:%s", current_page_num, ret, strrc(ret));
+          return ret;
+        }
+      }
+
+      if (!record_page_handler_.is_full()) {
+        page_found = true;
+        break;
+      }
+    }
+
+    // 找不到就分配一个新的页面
+    if (!page_found) {
+      BPPageHandle page_handle;
+      if ((ret = disk_buffer_pool_->allocate_page(file_id_, &page_handle)) != RC::SUCCESS) {
+        LOG_ERROR("Failed to allocate page while inserting record. file_it:%d, ret:%d",
+                  file_id_, ret);
+        return ret;
+      }
+
+      current_page_num = page_handle.frame->page.page_num;
+      record_page_handler_.deinit();
+      ret = record_page_handler_.init_empty_page(*disk_buffer_pool_, file_id_, current_page_num, res > fixed_size ? fixed_size : res);
+      if (ret != RC::SUCCESS) {
+        LOG_ERROR("Failed to init empty page. file_id:%d, ret:%d", file_id_, ret);
+        if (RC::SUCCESS != disk_buffer_pool_->unpin_page(&page_handle)) {
+          LOG_ERROR("Failed to unpin page. file_id:%d", file_id_);
+        }
+        return ret;
+      }
       if (RC::SUCCESS != disk_buffer_pool_->unpin_page(&page_handle)) {
         LOG_ERROR("Failed to unpin page. file_id:%d", file_id_);
       }
-      return ret;
     }
-    if (RC::SUCCESS != disk_buffer_pool_->unpin_page(&page_handle)) {
-      LOG_ERROR("Failed to unpin page. file_id:%d", file_id_);
-    }
-  }
 
-  // 找到空闲位置
-  return record_page_handler_.insert_record(data, rid);
+    // 找到空闲位置
+    ret = record_page_handler_.insert_record(data + cur, rid);
+    if (ret != RC::SUCCESS)
+      return ret;
+
+    res -= fixed_size;
+    cur += fixed_size;
+  }
+  return SUCCESS;
 }
 
 RC RecordFileHandler::update_record(const Record *rec) {
