@@ -94,6 +94,7 @@ ParserContext *get_context(yyscan_t scanner)
         INT_T
         STRING_T
         FLOAT_T
+        TEXT_T
         DATE_T
         HELP
         EXIT
@@ -287,7 +288,12 @@ attr_def:
 		{
 			AttrInfo attribute;
 			// 这里我们可以让nullable的属性列长度增加4个字节
-			attr_info_init(&attribute, CONTEXT->id, $2, 4 + $3 * 4, $3);
+			if ($2 == TEXTS) {
+				// TEXTS默认为4096字节
+				attr_info_init(&attribute, CONTEXT->id, CHARS, 4096 + $3 * 4, $3);
+			} else {
+				attr_info_init(&attribute, CONTEXT->id, $2, 4 + $3 * 4, $3);
+			}
 			create_table_append_attribute(&CONTEXT->ssql->sstr.create_table, &attribute);
 			CONTEXT->value_length++;
 		}
@@ -310,6 +316,7 @@ type:
        | STRING_T { $$=CHARS; }
        | FLOAT_T { $$=FLOATS; }
        | DATE_T { $$=DATE; }
+       | TEXT_T { $$ = TEXTS; }
        ;
 
 agg_type:

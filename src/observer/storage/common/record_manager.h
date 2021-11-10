@@ -76,6 +76,8 @@ public:
 
   PageNum get_page_num() const;
 
+  int get_page_size() const;
+
   bool is_full() const;
 
 private:
