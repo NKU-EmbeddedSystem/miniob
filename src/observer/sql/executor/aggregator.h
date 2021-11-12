@@ -37,7 +37,11 @@ public:
     : Aggregator(agg_desc), cnt_(0)
     { }
 
-  void consume(const Tuple &tuple) override { cnt_++; }
+  void consume(const Tuple &tuple) override {
+    if (tuple.size() == 1 && tuple.get(0).is_null())
+      return;
+    cnt_++;
+  }
   const TupleValue *result() const override { return new IntValue(cnt_); }
 
 private:
@@ -74,6 +78,8 @@ public:
     { }
 
   void consume(const Tuple &tuple) override {
+    if (tuple.get(pos_).is_null())
+      return;
     const TupleValue *other = &tuple.get(pos_);
     if (max_ == nullptr || max_->compare(*other) < 0) {
       max_ = other;
@@ -94,6 +100,8 @@ public:
 
   void consume(const Tuple &tuple) override {
     const TupleValue *other = &tuple.get(pos_);
+    if (other->is_null())
+      return;
     if (min_ == nullptr || min_->compare(*other) > 0) {
       min_ = other;
     }
@@ -117,6 +125,8 @@ public:
     { }
 
   void consume(const Tuple &tuple) override {
+    if (tuple.get(pos_).is_null())
+      return;
     (this->*acc_value_)(tuple.get(pos_));
     cnt_++;
   }
