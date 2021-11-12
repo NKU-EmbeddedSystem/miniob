@@ -291,24 +291,16 @@ bool filter(TupleSet &res, Tuple &cur, std::vector<Condition> &conditions, const
 void add_result(TupleSet &res, Tuple &cur, const TupleSchema &schema) {
   Tuple added;
   const auto& target_schema = res.schema();
-  int j = 0;
-  int i = 0;
-
-  while (j < target_schema.fields().size() && i < schema.fields().size()) {
-    auto target = target_schema.fields()[j];
-    auto origin = schema.fields()[i];
-    while ((strcmp(origin.field_name(), target.field_name()) != 0 || strcmp(origin.table_name(), target.table_name()) != 0)) {
-      i++;
-      if (i >= schema.fields().size())
+  for (int i = 0; i < target_schema.fields().size(); ++i) {
+    auto target = target_schema.fields()[i];
+    for (int j = 0; j < schema.fields().size(); ++j) {
+      auto origin = schema.fields()[j];
+      if (strcmp(origin.field_name(), target.field_name()) == 0 && strcmp(origin.field_name(), target.field_name()) == 0) {
+        auto value = cur.values()[j];
+        added.add(value);
         break;
-      origin = schema.fields()[i];
+      }
     }
-    if (i >= schema.fields().size())
-      break;
-    auto value = cur.values()[i];
-    added.add(value);
-    i++;
-    j++;
   }
 
   res.add(std::move(added));
@@ -365,6 +357,16 @@ do {                               \
 } while(0)
 
 
+void set_multiple_schema(TupleSchema &schema, const Selects &selects, const char *db) {
+  for (int i = selects.attr_num - 1; i >= 0; --i) {
+    char *table_name = selects.attributes[i].relation_name;
+    char *field_name = selects.attributes[i].attribute_name;
+    Table *table = DefaultHandler::get_default().find_table(db, table_name);
+    AttrType type = table->table_meta().field(field_name)->type();
+    schema.add(type, table_name, field_name);
+  }
+}
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
@@ -372,8 +374,8 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   RC rc = RC::SUCCESS;
   Session *session = session_event->get_client()->session;
   Trx *trx = session->current_trx();
-  const Selects &selects = sql->sstr.selection;
 
+  const Selects &selects = sql->sstr.selection;
   QueryChecker query_checker(db, selects);
   rc = query_checker.check_fields();
   if (rc != RC::SUCCESS) {
@@ -406,17 +408,15 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   }
 
   // 多表查询结果集schema
-  TupleSchema res_schema;
   TupleSchema connect_schema;
   size_t length = tuple_sets.size();
   for (int i = length - 1; i >= 0; i--) {
-    auto tmp_schema = TupleSchema();
-    tmp_schema.append(tuple_sets[i].schema());
     connect_schema.append(tuple_sets[i].schema());
-    for (int j = 0; j < extra_counts[i]; ++j) {
-      tmp_schema.pop_back();
-    }
-    res_schema.append(tmp_schema);
+  }
+
+  TupleSchema res_schema;
+  if (tuple_sets.size() > 1) {
+    set_multiple_schema(res_schema, selects, db);
   }
 
   if (tuple_sets.size() == 0) {
