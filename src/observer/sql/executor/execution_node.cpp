@@ -42,7 +42,9 @@ void record_reader(const char *data, void *context) {
 
 RC SelectExeNode::execute(TupleSet &tuple_set) {
   CompositeConditionFilter condition_filter;
-  condition_filter.init((const ConditionFilter **)condition_filters_.data(), condition_filters_.size());
+  const auto **filters = (const DefaultConditionFilter**)condition_filters_.data();
+  int length = (int)condition_filters_.size();
+  condition_filter.init((const ConditionFilter**)filters, length);
 
   tuple_set.clear();
   tuple_set.set_schema(tuple_schema_);

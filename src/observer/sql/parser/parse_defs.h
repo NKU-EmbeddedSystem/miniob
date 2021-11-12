@@ -36,7 +36,9 @@ typedef enum {
   LESS_THAN,    //"<"     3
   GREAT_EQUAL,  //">="    4
   GREAT_THAN,   //">"     5
-  NO_OP
+  NO_OP,
+  IS_OP,
+  IS_NOT_OP
 } CompOp;
 
 //属性值类型

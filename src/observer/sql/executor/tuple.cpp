@@ -205,7 +205,7 @@ void TupleSet::add(Tuple &&tuple) {
 
 
 void TupleSet::add_record(Tuple &tuple, TupleSchema &schema) {
-  const TupleSchema &res_schema = res.get_schema();
+  const TupleSchema &res_schema = get_schema();
   // 用来筛选只有res的列的tuple
   Tuple added;
   for (const auto &field : res_schema.fields()) {
