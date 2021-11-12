@@ -1148,6 +1148,11 @@ IndexScanner *Table::find_index_for_scan(const DefaultConditionFilter &filter) {
     return nullptr;
   }
 
+  if (field_meta->is_nullable()) {
+    // NULLable禁用索引
+    return nullptr;
+  }
+
   const IndexMeta *index_meta = table_meta_.find_index_by_field(field_meta->name());
   if (nullptr == index_meta) {
     return nullptr;
