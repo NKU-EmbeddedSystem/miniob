@@ -203,6 +203,18 @@ void TupleSet::add(Tuple &&tuple) {
   tuples_.emplace_back(std::move(tuple));
 }
 
+
+void TupleSet::add_record(Tuple &tuple, TupleSchema &schema) {
+  const TupleSchema &res_schema = res.get_schema();
+  // 用来筛选只有res的列的tuple
+  Tuple added;
+  for (const auto &field : res_schema.fields()) {
+    int schema_index = schema.index_of_field(field.field_name());
+    added.add(tuple.values()[schema_index]);
+  }
+  add(std::move(added));
+}
+
 void TupleSet::clear() {
   tuples_.clear();
   schema_.clear();
@@ -284,6 +296,7 @@ TupleRecordConverter::TupleRecordConverter(Table *table, TupleSet &tuple_set) :
       table_(table), tuple_set_(tuple_set){
 }
 
+
 void TupleRecordConverter::add_record(const char *record) {
   int offset = 0;
   const TupleSchema &schema = tuple_set_.schema();
@@ -335,6 +348,8 @@ void TupleRecordConverter::add_record(const char *record) {
 
   tuple_set_.add(std::move(tuple));
 }
+
+
 
 
 void AggSchema::print(std::ostream &os) const {

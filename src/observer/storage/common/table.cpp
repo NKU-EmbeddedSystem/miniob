@@ -434,7 +434,7 @@ bool do_custom_select(Table *table, const char *field_name, TupleSet &res_set, C
 
 /**
  * 用于insert时 unique index表中是否有一样的值
- * @param value unique index所在的列的值
+* @param value unique index所在的列的值
  * @param table 表指针
  * @param field_name 列名
  * @param res_set 结果集
