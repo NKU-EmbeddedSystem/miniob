@@ -234,8 +234,26 @@ bool filter(TupleSet &res, Tuple &cur, std::vector<Condition> &conditions, const
     const TupleValue &left_val = cur.get(left_idx);
     const TupleValue &right_val = cur.get(right_idx);
 
-    int cmp_result = left_val.compare(right_val);
+    bool left_isnull = left_val.is_null();
+    bool right_isnull =right_val.is_null();
 
+    auto comp_op_ = condition.comp;
+    if (comp_op_ != IS_OP && comp_op_ != IS_NOT_OP) {
+      if (left_isnull || right_isnull)
+        return false;
+    }
+    if (comp_op_ == IS_NOT_OP) {
+      if (!left_isnull)
+        return true;
+      return false;
+    }
+    if (comp_op_ == IS_OP) {
+      if (left_isnull)
+        return true;
+      return false;
+    }
+
+    int cmp_result = left_val.compare(right_val);
     switch (condition.comp) {
       case EQUAL_TO:
         if (cmp_result != 0)
@@ -261,10 +279,9 @@ bool filter(TupleSet &res, Tuple &cur, std::vector<Condition> &conditions, const
         if (cmp_result <= 0)
           return false;
         break;
-      case NO_OP:
+      default:
         LOG_ERROR("error operation\n");
         return false;
-        break;
     }
   }
 
