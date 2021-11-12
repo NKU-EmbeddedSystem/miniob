@@ -295,7 +295,7 @@ void add_result(TupleSet &res, Tuple &cur, const TupleSchema &schema) {
     auto target = target_schema.fields()[i];
     for (int j = 0; j < schema.fields().size(); ++j) {
       auto origin = schema.fields()[j];
-      if (strcmp(origin.field_name(), target.field_name()) == 0 && strcmp(origin.field_name(), target.field_name()) == 0) {
+      if (strcmp(origin.field_name(), target.field_name()) == 0 && strcmp(origin.table_name(), target.table_name()) == 0) {
         auto value = cur.values()[j];
         added.add(value);
         break;
