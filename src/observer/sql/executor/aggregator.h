@@ -86,7 +86,11 @@ public:
     }
   }
 
-  const TupleValue *result() const override { return max_->clone(); }
+  const TupleValue *result() const override {
+    if (max_ == nullptr)
+      return new NullValue();
+    return max_->clone();
+  }
 
 private:
   const TupleValue *max_;
@@ -107,7 +111,12 @@ public:
     }
   }
 
-  const TupleValue *result() const override { return min_->clone(); }
+  const TupleValue *result() const override {
+    if (min_ == nullptr) {
+      return new NullValue();
+    }
+    return min_->clone();
+  }
 
 private:
   const TupleValue *min_;
@@ -132,6 +141,8 @@ public:
   }
 
   const TupleValue *result() const override {
+    if (is_null)
+      return new NullValue();
     if (attr_type_ == INTS) {
       return new IntValue(int_sum_ / cnt_);
     } else {
@@ -141,10 +152,12 @@ public:
 
 private:
   void acc_int(const TupleValue &value) {
+    is_null = false;
     int_sum_ += static_cast<const IntValue &>(value).get_value();
   }
 
   void acc_float(const TupleValue &value) {
+    is_null = false;
     float_sum_ += static_cast<const FloatValue &>(value).get_value();
   }
 
@@ -153,6 +166,7 @@ private:
     int int_sum_ = 0;
     float float_sum_;
   };
+  bool is_null = true;
   AttrType attr_type_;
   acc_value_func_t acc_value_;
 };
