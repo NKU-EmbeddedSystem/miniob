@@ -153,6 +153,8 @@ public:
 
   void add(Tuple && tuple);
 
+  void add_record(Tuple &tuple, TupleSchema &schema);
+
   void clear();
 
   bool is_empty() const;

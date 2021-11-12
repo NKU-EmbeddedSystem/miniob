@@ -35,6 +35,23 @@ public:
 private:
 };
 
+
+class NullValue : public TupleValue {
+public:
+    NullValue() = default;
+    int compare(const TupleValue &other) const override{
+      return false;
+    }
+
+    void to_string(std::ostream &os) const override {
+      os << "null";
+    }
+
+    TupleValue * clone() const override {
+      return new NullValue();
+    }
+};
+
 class IntValue : public TupleValue {
 public:
   explicit IntValue(int value) : value_(value) {
@@ -45,7 +62,12 @@ public:
   }
 
   int compare(const TupleValue &other) const override {
-    const IntValue & int_other = (const IntValue &)other;
+    auto *p_other = const_cast<TupleValue *>(&other);
+    auto *test = dynamic_cast<NullValue*>(p_other);
+    if (test != nullptr) {
+      return -1;
+    }
+    const auto &int_other = (const IntValue &)other;
     return value_ - int_other.value_;
   }
 
@@ -76,6 +98,12 @@ public:
   }
 
   int compare(const TupleValue &other) const override {
+    auto *p_other = const_cast<TupleValue *>(&other);
+    auto *test = dynamic_cast<NullValue*>(p_other);
+    if (test != nullptr) {
+      return -1;
+    }
+
     const auto & float_other = (const FloatValue &)other;
     float result = value_ - float_other.value_;
     if (std::abs(result) < 1e-7)
@@ -106,7 +134,12 @@ public:
   }
 
   int compare(const TupleValue &other) const override {
-    const StringValue &string_other = (const StringValue &)other;
+    auto *p_other = const_cast<TupleValue *>(&other);
+    auto *test = dynamic_cast<NullValue*>(p_other);
+    if (test != nullptr) {
+      return -1;
+    }
+    const auto &string_other = (const StringValue &)other;
     return strcmp(value_.c_str(), string_other.value_.c_str());
   }
 
@@ -136,7 +169,12 @@ public:
   }
 
   int compare(const TupleValue &other) const override {
-    const auto &date_value = static_cast<const DateValue &>(other);
+    auto *p_other = const_cast<TupleValue *>(&other);
+    auto *test = dynamic_cast<NullValue*>(p_other);
+    if (test != nullptr) {
+      return -1;
+    }
+    const auto &date_value = dynamic_cast<const DateValue &>(other);
     return static_cast<int>(value_ - date_value.value_);
   }
 
@@ -162,23 +200,8 @@ private:
   static bool check_date_with_syscall(const tm *t);
 
   date_t value_;
-  char str_[12];
+  char str_[12]{};
 };
 
-class NullValue : public TupleValue {
-public:
-    NullValue() = default;
-    int compare(const TupleValue &other) const override{
-      return false;
-    }
-
-    void to_string(std::ostream &os) const override {
-      os << "null";
-    }
-
-    TupleValue * clone() const override {
-      return new NullValue();
-    }
-};
 
 #endif //__OBSERVER_SQL_EXECUTOR_VALUE_H_
