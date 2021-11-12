@@ -31,6 +31,7 @@ public:
   virtual void to_string(std::ostream &os) const = 0;
   virtual int compare(const TupleValue &other) const = 0;
   virtual TupleValue *clone() const = 0;
+  virtual bool is_null() const = 0;
 
 private:
 };
@@ -49,6 +50,10 @@ public:
 
     TupleValue * clone() const override {
       return new NullValue();
+    }
+
+    bool is_null() const override{
+      return true;
     }
 };
 
@@ -75,6 +80,9 @@ public:
 
   int get_value() const { return value_; }
 
+  bool is_null() const override{
+    return false;
+  }
 private:
   int value_;
 };
@@ -117,7 +125,9 @@ public:
   TupleValue *clone() const override { return new FloatValue(value_); }
 
   float get_value() const { return value_; }
-
+  bool is_null() const override{
+    return false;
+  }
 private:
   float value_;
 };
@@ -144,7 +154,9 @@ public:
   }
 
   TupleValue *clone() const override { return new StringValue(value_.c_str()); }
-
+  bool is_null() const override{
+    return false;
+  }
 private:
   std::string value_;
 };
@@ -193,6 +205,9 @@ public:
   static date_t to_raw_data(tm *t);
   static void from_raw_data(date_t days, tm *t);
 
+  bool is_null() const override{
+    return false;
+  }
 private:
   void init_str(date_t days);
 
