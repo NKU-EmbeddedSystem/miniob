@@ -361,6 +361,16 @@ void set_multiple_schema(TupleSchema &schema, const Selects &selects, const char
   for (int i = selects.attr_num - 1; i >= 0; --i) {
     char *table_name = selects.attributes[i].relation_name;
     char *field_name = selects.attributes[i].attribute_name;
+    if (strcmp("*", field_name) == 0) {
+      for (int j = selects.relation_num - 1; j >=0; --j) {
+        char *relation_name = selects.relations[j];
+        Table *table = DefaultHandler::get_default().find_table(db, relation_name);
+        TupleSchema tmp;
+        TupleSchema::from_table(table, tmp);
+        schema.append(tmp);
+      }
+      break;
+    }
     Table *table = DefaultHandler::get_default().find_table(db, table_name);
     AttrType type = table->table_meta().field(field_name)->type();
     schema.add(type, table_name, field_name);
