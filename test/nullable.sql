@@ -1,4 +1,4 @@
-drop table t1;
+drop table t;
 create table t(id int, num int nullable, birthday date nullable);
 create index i_num on t(num);
 insert into t values(1, 2, '2020-01-01');

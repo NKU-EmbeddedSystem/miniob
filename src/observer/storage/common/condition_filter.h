@@ -25,7 +25,9 @@ struct ConDesc {
   bool   is_attr;     // 是否属性，false 表示是值
   int    attr_length; // 如果是属性，表示属性值长度
   int    attr_offset; // 如果是属性，表示在记录中的偏移量
-  void * value;       // 如果是值类型，这里记录值的数据
+  void   *value;      // 如果是值类型，这里记录值的数据
+  bool   nullable_;    // 如果是属性的话表示一下是否可以为空
+  bool   isnull_;
 };
 
 class ConditionFilter {

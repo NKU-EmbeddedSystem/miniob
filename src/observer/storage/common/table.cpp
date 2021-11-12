@@ -520,9 +520,10 @@ RC Table::make_record(int value_num, const Value *values, char * &record_out) {
     const Value &value = values[i];
     if (field->is_nullable()) {
       // 增加4个字节用来表示是否为空
-      int *null_flag = reinterpret_cast<int *>(record + field->offset());
+      int *null_flag = (int*)(record + field->offset());
       if (value.type == NULLS) {
         *null_flag = 1;
+        memset(record + field->offset() + 4, 0, field->len() - 4);
       }
       else {
         *null_flag = 0;
