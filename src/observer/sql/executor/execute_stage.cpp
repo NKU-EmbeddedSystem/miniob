@@ -405,6 +405,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 
   vector<Order> orders;
   push_orders(selects, orders);
+  std::reverse(orders.begin(), orders.end());
 
   vector<int> extra_counts;
   vector<SelectExeNode *> select_nodes;
