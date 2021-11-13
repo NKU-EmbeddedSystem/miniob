@@ -167,6 +167,9 @@ public:
   void pop_row();
 
   void mprint(std::ostream &os);
+
+  void sort_by_orders(std::vector<Order> &orders);
+
 public:
   const TupleSchema &schema() const {
     return schema_;
@@ -174,6 +177,7 @@ public:
 private:
   std::vector<Tuple> tuples_;
   TupleSchema schema_;
+
 };
 
 class TupleRecordConverter {
