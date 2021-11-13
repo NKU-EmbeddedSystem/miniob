@@ -328,8 +328,10 @@ agg_type:
 	;
 
 order_type:
-	ASC { $$ = ORDER_ASC; }
-	| DESC { $$ = ORDER_DESC; }
+	ASC {
+	$$ = ORDER_ASC; printf("I am ASC\n");}
+	| DESC {
+	$$ = ORDER_DESC; printf("I am DESC\n");}
 	;
 
 ID_get:
@@ -705,7 +707,7 @@ order:
 	| ORDER BY ID order_type order_attrs
 		{
 			Order order;
-			order_info_init(&order,CONTEXT->order_type,NULL,$3);
+			order_info_init(&order, $4, NULL,$3);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 	| ORDER BY ID order_attrs
@@ -723,7 +725,7 @@ order:
 	| ORDER BY ID DOT ID order_type order_attrs
 		{
 			Order order;
-			order_info_init(&order,CONTEXT->order_type,$3,$5);
+			order_info_init(&order, $6, $3, $5);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 		;
@@ -732,7 +734,8 @@ order_attrs:
 	| COMMA ID order_type order_attrs
 		{
 			Order order;
-			order_info_init(&order,CONTEXT->order_type,NULL,$2);
+			printf("odered_type : %d\n", CONTEXT->order_type);
+			order_info_init(&order, $3, NULL,$2);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 	| COMMA ID order_attrs
@@ -749,7 +752,7 @@ order_attrs:
 		}
 	| COMMA ID DOT ID order_type order_attrs{
 			Order order;
-			order_info_init(&order,CONTEXT->order_type,$2,$4);
+			order_info_init(&order, $5, $2,$4);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 	;
