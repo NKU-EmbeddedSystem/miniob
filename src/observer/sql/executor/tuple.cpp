@@ -68,6 +68,38 @@ void Tuple::pop_back() {
   values_.pop_back();
 }
 
+std::vector<std::pair<int, OrderType>> orders_;
+
+bool compare(const Tuple &t1, const Tuple &t2) {
+  for (const auto & order : orders_) {
+    int comp = t1.get(order.first).compare(t2.get(order.first));
+    if (order.second == ORDER_DESC) {
+      comp = -comp;
+    }
+    if (comp < 0)
+      return true;
+    if (comp > 0)
+      return false;
+  }
+  return false;
+}
+
+void TupleSet::sort_by_orders(std::vector<Order> &orders) {
+  if (orders.empty())
+    return;
+  const auto &schema = get_schema();
+  orders_.clear();
+  for (const auto order: orders) {
+    int field_index;
+    if (order.order_attr.relation_name == nullptr) {
+      field_index = schema.index_of_field(order.order_attr.attribute_name);
+    } else {
+      field_index = schema.index_of_field(order.order_attr.relation_name, order.order_attr.attribute_name);
+    }
+    orders_.emplace_back(field_index, order.order_type);
+  }
+  std::sort(tuples_.begin(), tuples_.end(), compare);
+}
 ////////////////////////////////////////////////////////////////////////////////
 
 std::string TupleField::to_string() const {

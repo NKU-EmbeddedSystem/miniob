@@ -377,6 +377,17 @@ void set_multiple_schema(TupleSchema &schema, const Selects &selects, const char
   }
 }
 
+/**
+ * 把orders放到数组里面去
+ * @param selects 查询
+ * @param orders 结果数组
+ */
+void push_orders(const Selects &selects, std::vector<Order> &orders) {
+  for (int i = 0; i < selects.order_num; ++i) {
+    orders.push_back(selects.orders[i]);
+  }
+}
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
@@ -391,6 +402,9 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   if (rc != RC::SUCCESS) {
     RETURN_FAILURE;
   }
+
+  vector<Order> orders;
+  push_orders(selects, orders);
 
   vector<int> extra_counts;
   vector<SelectExeNode *> select_nodes;
@@ -464,7 +478,11 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
     result_tuple_set = &tuple_sets.front();
   }
 
+  // sort
+  result_tuple_set->sort_by_orders(orders);
+
   if (selects.agg_num > 0) {
+    // 聚合查询
     AggTupleSet agg_tuple_set;
     AggregationExecutor executor(selects, *result_tuple_set);
 
@@ -472,8 +490,8 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
     if (rc != RC::SUCCESS) {
       ROLL_BACK_SELECT_EXE_NODES;
     }
-
     agg_tuple_set.print(ss);
+
   } else {
     if (tuple_sets.size() > 1) {
       result_tuple_set->mprint(ss);

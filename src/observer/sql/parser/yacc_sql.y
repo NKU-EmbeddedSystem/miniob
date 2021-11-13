@@ -329,7 +329,7 @@ agg_type:
 
 order_type:
 	ASC { $$ = ORDER_ASC; }
-	| DESC { $$ =ORDER_DESC; }
+	| DESC { $$ = ORDER_DESC; }
 	;
 
 ID_get:
@@ -393,6 +393,7 @@ delete:		/*  delete 语句的语法解析树*/
 			CONTEXT->condition_length = 0;	
     }
     ;
+
 update:			/*  update 语句的语法解析树*/
     UPDATE ID SET ID EQ value where SEMICOLON
 		{
@@ -700,23 +701,50 @@ load_data:
 		;
 
 order:
-		/* empty */
-	| ORDER BY ID order_type order_attrs {
+	/* empty */
+	| ORDER BY ID order_type order_attrs
+		{
 			Order order;
 			order_info_init(&order,CONTEXT->order_type,NULL,$3);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
-	| ORDER BY ID DOT ID order_type order_attrs {
+	| ORDER BY ID order_attrs
+		{
+			Order order;
+			order_info_init(&order, ASC, NULL, $3);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	| ORDER BY ID DOT ID order_attrs
+		{
+			Order order;
+			order_info_init(&order, ASC, $3, $5);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	| ORDER BY ID DOT ID order_type order_attrs
+		{
 			Order order;
 			order_info_init(&order,CONTEXT->order_type,$3,$5);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 		;
 order_attrs:
-		/* empty */
-	| COMMA ID order_type order_attrs{
+	/* empty */
+	| COMMA ID order_type order_attrs
+		{
 			Order order;
 			order_info_init(&order,CONTEXT->order_type,NULL,$2);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	| COMMA ID order_attrs
+		{
+			Order order;
+			order_info_init(&order, ASC, NULL, $2);
+			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
+		}
+	| COMMA ID DOT ID order_attrs
+		{
+			Order order;
+			order_info_init(&order, ASC, $2, $4);
 			selects_append_order(&CONTEXT->ssql->sstr.selection, &order);
 		}
 	| COMMA ID DOT ID order_type order_attrs{
