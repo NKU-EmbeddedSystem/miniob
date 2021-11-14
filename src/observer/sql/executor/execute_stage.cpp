@@ -494,7 +494,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
         ROLL_BACK_SELECT_EXE_NODES;
       }
 
-      group_by_tuple_set.print(ss);
+      group_by_tuple_set.print(ss, selects);
     } else {
       AggTupleSet agg_tuple_set;
       AggregationExecutor executor(selects, *result_tuple_set);
