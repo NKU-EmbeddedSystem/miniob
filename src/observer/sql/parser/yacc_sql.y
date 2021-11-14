@@ -104,6 +104,7 @@ ParserContext *get_context(yyscan_t scanner)
         FROM
         WHERE
         AND
+        GROUP
         SET
         ON
         IS
@@ -407,7 +408,7 @@ update:			/*  update 语句的语法解析树*/
 		}
     ;
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where order SEMICOLON
+    SELECT select_attr FROM ID rel_list where group_by order SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
 			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
@@ -682,6 +683,34 @@ condition:
 			// $$->right_attr.attribute_name=$7;
     }
     ;
+
+group_by:
+	/* empty */
+	| GROUP BY ID group_by_attr_list {
+		RelAttr attr;
+		relation_attr_init(&attr, NULL, $3);
+		selects_append_group_by_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+	}
+	| GROUP BY ID DOT ID group_by_attr_list {
+		RelAttr attr;
+		relation_attr_init(&attr, $3, $5);
+		selects_append_group_by_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+	}
+	;
+
+group_by_attr_list:
+	/* empty */
+	| COMMA ID group_by_attr_list {
+		RelAttr attr;
+		relation_attr_init(&attr, NULL, $2);
+		selects_append_group_by_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+    }
+    | COMMA ID DOT ID group_by_attr_list {
+		RelAttr attr;
+		relation_attr_init(&attr, $2, $4);
+		selects_append_group_by_attribute(&CONTEXT->ssql->sstr.selection, &attr);
+  	}
+  	;
 
 comOp:
     EQ { CONTEXT->comp = EQUAL_TO; }

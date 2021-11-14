@@ -128,6 +128,7 @@ public:
     fields_.pop_back();
   }
 
+  void print_content(std::ostream &os) const;
   void print(std::ostream &os) const;
   void mprint(std::ostream &os);
 public:
@@ -195,6 +196,7 @@ public:
   AggSchema() = default;
 
   void add(const AggDesc &agg_desc) { fields_.emplace_back(agg_desc); }
+  void print_content(std::ostream &os) const;
   void print(std::ostream &os) const;
   const std::vector<AggDesc> &fields() const { return fields_; }
 
@@ -215,4 +217,39 @@ private:
   AggSchema schema_;
   std::vector<Tuple> tuples_;
 };
+
+class GroupBySchema {
+public:
+  GroupBySchema() = default;
+
+  void add_if_not_exists(AttrType type, const char *table_name, const char *field_name) {
+    group_schema_.add_if_not_exists(type, table_name, field_name);
+  }
+
+  void add(const AggDesc &agg_desc) { agg_schema_.add(agg_desc); }
+  const TupleSchema &group_schema() const { return group_schema_; }
+  const AggSchema &agg_schema() const { return agg_schema_; }
+
+  void print(std::ostream &os) const;
+
+private:
+  TupleSchema group_schema_;
+  AggSchema agg_schema_;
+};
+
+class GroupByTupleSet {
+public:
+  GroupByTupleSet() = default;
+
+  GroupBySchema &schema() { return schema_; }
+  void add(Tuple &&tuple) {
+    tuples_.emplace_back(std::move(tuple));
+  }
+  void print(std::ostream &os) const;
+
+private:
+  GroupBySchema schema_;
+  std::vector<Tuple> tuples_;
+};
+
 #endif //__OBSERVER_SQL_EXECUTOR_TUPLE_H_

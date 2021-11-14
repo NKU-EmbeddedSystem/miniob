@@ -26,14 +26,13 @@ See the Mulan PSL v2 for more details. */
 #include "event/execution_plan_event.h"
 #include "sql/executor/aggregation_executor.h"
 #include "sql/executor/execution_node.h"
+#include "sql/executor/grouper.h"
 #include "sql/executor/query_checker.h"
 #include "sql/executor/single_relation_select_execution_node_creator.h"
 #include "storage/default/default_handler.h"
 #include <cstdlib>
 
 using namespace common;
-
-RC create_selection_executor(Trx *trx, const Selects &selects, const char *db, const char *table_name, SelectExeNode **select_node, int &extra_count);
 
 //! Constructor
 ExecuteStage::ExecuteStage(const char *tag) : Stage(tag) {}
@@ -441,7 +440,11 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 
   TupleSchema res_schema;
   if (tuple_sets.size() > 1) {
-    set_multiple_schema(res_schema, selects, db);
+    if (selects.agg_num > 0) {
+      res_schema = connect_schema;
+    } else {
+      set_multiple_schema(res_schema, selects, db);
+    }
   }
 
   if (tuple_sets.size() == 0) {
@@ -483,16 +486,26 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   result_tuple_set->sort_by_orders(orders);
 
   if (selects.agg_num > 0) {
-    // 聚合查询
-    AggTupleSet agg_tuple_set;
-    AggregationExecutor executor(selects, *result_tuple_set);
+    if (selects.group_by_num > 0) {
+      GroupByTupleSet group_by_tuple_set;
+      Grouper grouper(selects, *result_tuple_set, db);
+      rc = grouper.execute(group_by_tuple_set);
+      if (rc != RC::SUCCESS) {
+        ROLL_BACK_SELECT_EXE_NODES;
+      }
 
-    rc = executor.execute(agg_tuple_set);
-    if (rc != RC::SUCCESS) {
-      ROLL_BACK_SELECT_EXE_NODES;
+      group_by_tuple_set.print(ss);
+    } else {
+      AggTupleSet agg_tuple_set;
+      AggregationExecutor executor(selects, *result_tuple_set);
+
+      rc = executor.execute(agg_tuple_set);
+      if (rc != RC::SUCCESS) {
+        ROLL_BACK_SELECT_EXE_NODES;
+      }
+
+      agg_tuple_set.print(ss);
     }
-    agg_tuple_set.print(ss);
-
   } else {
     if (tuple_sets.size() > 1) {
       result_tuple_set->mprint(ss);

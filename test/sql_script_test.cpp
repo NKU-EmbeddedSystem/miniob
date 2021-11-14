@@ -95,13 +95,17 @@ void test_script(const vector<string> &sql_script_names)
       if (strlen(send_buf) > 2 && send_buf[0] == '-' && send_buf[1] == '-') {
         continue;
       }
-      send_buf[strlen(send_buf) - 1] = '\0';
+      if (send_buf[strlen(send_buf) - 1] != ';') {
+        send_buf[strlen(send_buf) - 1] = '\0';
+      } else {
+        send_buf[strlen(send_buf)] = '\0';
+      }
       if (send(sockfd, send_buf, strlen(send_buf) + 1, 0) == -1) {
         perror("send error \n");
         exit(1);
       }
       cout << "  [SQL] " << send_buf << endl;
-      usleep(450000);
+      usleep(200000);
       memset(recv_buf, 0, sizeof(recv_buf));
       int len = recv(sockfd, recv_buf, sizeof(recv_buf), 0);
       if (len < 0) {
@@ -135,9 +139,15 @@ int main() {
     "aggregation_test4.sql",
     "basic_test.sql",
     "date_test.sql",
+    "group_by_test.sql",
+    "group_by_test2.sql",
+    "group_by_test3.sql",
     "identifier_test.sql",
+    "nullable.sql",
+    "order.sql",
     "outer_join_empty_test.sql",
     "outer_join_test.sql",
+    "unique.sql",
     "where_test.sql",
   });
 }

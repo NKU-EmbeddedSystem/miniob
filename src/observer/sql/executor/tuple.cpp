@@ -163,7 +163,7 @@ int TupleSchema::index_of_field(const char *field_name) const {
   return -1;
 }
 
-void TupleSchema::print(std::ostream &os) const {
+void TupleSchema::print_content(std::ostream &os) const {
   if (fields_.empty()) {
     os << "No schema";
     return;
@@ -186,7 +186,12 @@ void TupleSchema::print(std::ostream &os) const {
   if (table_names.size() > 1) {
     os << fields_.back().table_name() << ".";
   }
-  os << fields_.back().field_name() << std::endl;
+  os << fields_.back().field_name();
+}
+
+void TupleSchema::print(std::ostream &os) const {
+  print_content(os);
+  os << std::endl;
 }
 
 void TupleSchema::mprint(std::ostream &os) {
@@ -381,10 +386,7 @@ void TupleRecordConverter::add_record(const char *record) {
   tuple_set_.add(std::move(tuple));
 }
 
-
-
-
-void AggSchema::print(std::ostream &os) const {
+void AggSchema::print_content(std::ostream &os) const {
   if (fields_.empty()) {
     os << "No schema";
     return;
@@ -414,12 +416,49 @@ void AggSchema::print(std::ostream &os) const {
     }
     os << back.agg_attr.attribute_name;
   }
-  os << ")" << std::endl;
+  os << ")";
+}
+
+void AggSchema::print(std::ostream &os) const {
+  print_content(os);
+  os << std::endl;
 }
 
 void AggTupleSet::print(std::ostream &os) const {
   if (schema_.fields().empty()) {
     LOG_WARN("Got empty schema");
+    return;
+  }
+
+  schema_.print(os);
+
+  for (const Tuple &item : tuples_) {
+    const std::vector<std::shared_ptr<TupleValue>> &values = item.values();
+    for (auto iter = values.begin(), end = --values.end();
+         iter != end; ++iter) {
+      (*iter)->to_string(os);
+      os << " | ";
+    }
+    values.back()->to_string(os);
+    os << std::endl;
+  }
+}
+
+void GroupBySchema::print(std::ostream &os) const {
+  group_schema_.print_content(os);
+  os << " | ";
+  agg_schema_.print_content(os);
+  os << std::endl;
+}
+
+void GroupByTupleSet::print(std::ostream &os) const {
+  if (schema_.group_schema().fields().empty()) {
+    LOG_WARN("Got empty group by group schema");
+    return;
+  }
+
+  if (schema_.agg_schema().fields().empty()) {
+    LOG_WARN("Got empty group by agg schema");
     return;
   }
 

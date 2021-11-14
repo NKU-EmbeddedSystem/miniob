@@ -217,6 +217,13 @@ void selects_append_conditions(Selects *selects, Condition conditions[], size_t 
   }
   selects->condition_num = condition_num;
 }
+void selects_append_group_by_attribute(Selects *selects, RelAttr *rel_attr) {
+  if (selects->group_by_num >= MAX_NUM) {
+    LOG_ERROR("to much arguments\n");
+    return;
+  }
+  selects->group_by_attributes[selects->group_by_num++] = *rel_attr;
+}
 void selects_append_order(Selects *selects, Order *order){
   selects->orders[selects->order_num++] = *order;
 }
