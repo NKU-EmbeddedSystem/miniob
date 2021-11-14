@@ -149,7 +149,7 @@ public:
       return new NullValue();
 
     if (attr_type_ == INTS) {
-      return new IntValue(int_sum_ / cnt_);
+      return new FloatValue(((float)int_sum_) / cnt_);
     } else {
       return new FloatValue(float_sum_ / cnt_);
     }
