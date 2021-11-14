@@ -46,7 +46,7 @@ select agg_test.sv, agg_test2.sv, avg(agg_test.iv), min(agg_test2.sv) from agg_t
 select agg_test.sv, agg_test2.sv, avg(agg_test.iv), count(*) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;
 select agg_test.sv, agg_test2.sv, avg(agg_test.iv), count(10) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;
 select agg_test.sv, agg_test2.sv, avg(agg_test.iv), avg(agg_test2.iv) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;
-select agg_test.sv, agg_test2.sv, avg(agg_test.iv), avg(agg_test2.fv) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;
+select agg_test.iv, agg_test.sv, avg(agg_test.iv), avg(agg_test2.fv) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.iv, agg_test.sv;
 select agg_test.sv, agg_test2.sv, avg(agg_test.iv), avg(2) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;
 select agg_test.sv, agg_test2.sv, avg(2), max(agg_test2.iv) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;
 select agg_test.sv, agg_test2.sv, avg(2), max(agg_test2.sv) from agg_test, agg_test2 where agg_test2.fv > agg_test.fv group by agg_test.sv, agg_test2.sv;

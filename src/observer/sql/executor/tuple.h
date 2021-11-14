@@ -130,7 +130,8 @@ public:
 
   void print_content(std::ostream &os) const;
   void print(std::ostream &os) const;
-  void mprint(std::ostream &os);
+  void mprint_content(std::ostream &os) const;
+  void mprint(std::ostream &os) const;
 public:
   static void from_table(const Table *table, TupleSchema &schema);
 
@@ -230,7 +231,7 @@ public:
   const TupleSchema &group_schema() const { return group_schema_; }
   const AggSchema &agg_schema() const { return agg_schema_; }
 
-  void print(std::ostream &os) const;
+  void print(std::ostream &os, const Selects &selects) const;
 
 private:
   TupleSchema group_schema_;
@@ -245,7 +246,7 @@ public:
   void add(Tuple &&tuple) {
     tuples_.emplace_back(std::move(tuple));
   }
-  void print(std::ostream &os) const;
+  void print(std::ostream &os, const Selects &selects) const;
 
 private:
   GroupBySchema schema_;

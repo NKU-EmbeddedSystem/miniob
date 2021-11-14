@@ -194,7 +194,7 @@ void TupleSchema::print(std::ostream &os) const {
   os << std::endl;
 }
 
-void TupleSchema::mprint(std::ostream &os) {
+void TupleSchema::mprint_content(std::ostream &os) const {
    if (fields_.empty()) {
     os << "No schema";
     return;
@@ -213,8 +213,12 @@ void TupleSchema::mprint(std::ostream &os) {
   }
 
   os << fields_.back().table_name() << ".";
-  os << fields_.back().field_name() << std::endl;
- 
+  os << fields_.back().field_name();
+}
+
+void TupleSchema::mprint(std::ostream &os) const {
+  mprint_content(os);
+  os << std::endl;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -444,14 +448,18 @@ void AggTupleSet::print(std::ostream &os) const {
   }
 }
 
-void GroupBySchema::print(std::ostream &os) const {
-  group_schema_.print_content(os);
+void GroupBySchema::print(std::ostream &os, const Selects &selects) const {
+  if (selects.relation_num > 1) {
+    group_schema_.mprint_content(os);
+  } else {
+    group_schema_.print_content(os);
+  }
   os << " | ";
   agg_schema_.print_content(os);
   os << std::endl;
 }
 
-void GroupByTupleSet::print(std::ostream &os) const {
+void GroupByTupleSet::print(std::ostream &os, const Selects &selects) const {
   if (schema_.group_schema().fields().empty()) {
     LOG_WARN("Got empty group by group schema");
     return;
@@ -462,7 +470,7 @@ void GroupByTupleSet::print(std::ostream &os) const {
     return;
   }
 
-  schema_.print(os);
+  schema_.print(os, selects);
 
   for (const Tuple &item : tuples_) {
     const std::vector<std::shared_ptr<TupleValue>> &values = item.values();
