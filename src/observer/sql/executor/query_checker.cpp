@@ -29,7 +29,12 @@ RC QueryChecker::check_fields() {
     return rc;
   }
 
-  rc = (this->*check_select_list_fields_)();
+  rc = check_attribute_list_fields();
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  rc = check_aggregation_list_fields();
   if (rc != RC::SUCCESS) {
     return rc;
   }
@@ -146,9 +151,32 @@ RC QueryChecker::check_group_by_fields() {
     if (rc != RC::SUCCESS) {
       return rc;
     }
+
+    if (!find_group_by_field_in_attribute_list(rel_attr)) {
+      LOG_ERROR("Cannot find group by table: %s field: %s from attribute list",
+                rel_attr.relation_name, rel_attr.attribute_name);
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    }
   }
 
   return RC::SUCCESS;
+}
+
+bool QueryChecker::find_group_by_field_in_attribute_list(const RelAttr &group_by_field) {
+  bool field_found, table_found;
+
+  for (int i = 0; i < selects_.attr_num; i++) {
+    const auto &attr_field = selects_.attributes[i];
+    field_found = strcmp(group_by_field.attribute_name, attr_field.attribute_name) == 0;
+    table_found = group_by_field.relation_name == nullptr
+      || attr_field.relation_name == nullptr
+      || strcmp(group_by_field.relation_name, attr_field.relation_name) == 0;
+    if (field_found && table_found) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 RC QueryChecker::check_aggregation_list_fields() {
