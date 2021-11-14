@@ -24,11 +24,7 @@ public:
       relattr_match_table_(
               (selects.relation_num > 1)
               ? &QueryChecker::non_nullable_relattr_match_any_table
-              : &QueryChecker::nullable_relattr_match_table),
-      check_select_list_fields_(
-              (selects.agg_num > 0)
-              ? &QueryChecker::check_aggregation_list_fields
-              : &QueryChecker::check_attribute_list_fields)
+              : &QueryChecker::nullable_relattr_match_table)
     { }
 
   RC check_fields();
@@ -39,6 +35,7 @@ private:
   RC check_from_relations_and_init_tables();
   RC check_where_fields();
   RC check_group_by_fields();
+  bool find_group_by_field_in_attribute_list(const RelAttr &group_by_field);
   RC check_attribute_list_fields();
   RC check_aggregation_list_fields();
 
@@ -47,7 +44,6 @@ private:
   vector<Table *> tables_;
   bool is_aggregation_query_;
   relattr_match_func_t relattr_match_table_;
-  select_list_fields_check_func_t check_select_list_fields_;
 };
 
 #endif //MINIDB_QUERY_CHECKER_H
