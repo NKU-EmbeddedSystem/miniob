@@ -90,6 +90,8 @@ typedef struct {
   char *    relations[MAX_NUM];     // relations in From clause
   size_t    condition_num;          // Length of conditions in Where clause
   Condition conditions[MAX_NUM];    // conditions in Where clause
+  size_t    group_by_num;           // Length of groups
+  RelAttr   group_by_attributes[MAX_NUM];   // relations in Group By
   Order  orders[MAX_NUM];  //order attrs for Order
   size_t order_num;
 } Selects;
@@ -239,6 +241,8 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr);
 void selects_append_agg(Selects *selects, AggDesc *agg_desc);
 void selects_append_relation(Selects *selects, const char *relation_name);
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num);
+void selects_append_group_by_attribute(Selects *selects, RelAttr *rel_attr);
+void selects_append_order(Selects *selects, Order *order);
 void selects_destroy(Selects *selects);
 
 void inserts_init(Inserts *inserts, const char *relation_name, Value values[], size_t value_num);
