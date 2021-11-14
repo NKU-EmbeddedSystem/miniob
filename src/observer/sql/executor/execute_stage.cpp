@@ -361,7 +361,7 @@ void set_multiple_schema(TupleSchema &schema, const Selects &selects, const char
     char *table_name = selects.attributes[i].relation_name;
     char *field_name = selects.attributes[i].attribute_name;
     if (strcmp("*", field_name) == 0) {
-      for (int j = 0; j < selects.relation_num; ++j) {
+      for (int j = selects.relation_num - 1; j >= 0; --j) {
         char *relation_name = selects.relations[j];
         Table *table = DefaultHandler::get_default().find_table(db, relation_name);
         TupleSchema tmp;

@@ -410,10 +410,10 @@ update:			/*  update 语句的语法解析树*/
 		}
     ;
 select:				/*  select 语句的语法解析树*/
-    SELECT select_attr FROM table rel_list where group_by order SEMICOLON
+    SELECT select_attr FROM ID join_list rel_list where group_by order SEMICOLON
 		{
 			// CONTEXT->ssql->sstr.selection.relations[CONTEXT->from_length++]=$4;
-//			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
 			selects_append_conditions(&CONTEXT->ssql->sstr.selection, CONTEXT->conditions, CONTEXT->condition_length);
 
 			CONTEXT->ssql->flag=SCF_SELECT;//"select";
@@ -427,13 +427,18 @@ select:				/*  select 语句的语法解析树*/
 	}
 	;
 
-table:
-	ID 	{
-			selects_append_relation(&CONTEXT->ssql->sstr.selection, $1);
-		}
-	| table INNER JOIN ID ON condition condition_list
+//table:
+//	ID join_list
+//		{
+//			selects_append_relation(&CONTEXT->ssql->sstr.selection, $1);
+//		}
+//	;
+
+join_list:
+	// empty
+	| INNER JOIN ID ON condition condition_list join_list
 		{
-			selects_append_relation(&CONTEXT->ssql->sstr.selection, $4);
+			selects_append_relation(&CONTEXT->ssql->sstr.selection, $3);
 		}
 	;
 
@@ -529,9 +534,9 @@ agg_list:
 
 rel_list:
     /* empty */
-    | COMMA table rel_list
+    | COMMA ID join_list rel_list
     		{
-//			selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
+			selects_append_relation(&CONTEXT->ssql->sstr.selection, $2);
 		}
     ;
 where:
