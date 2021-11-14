@@ -445,31 +445,32 @@ select_attr:
 			relation_attr_init(&attr, $1, $3);
 			selects_append_attribute(&CONTEXT->ssql->sstr.selection, &attr);
 		}
-    | agg_type LBRACE STAR RBRACE agg_list
+    | agg_type LBRACE STAR RBRACE attr_list
     		{
 			AggDesc agg_desc;
 			agg_desc_init_string(&agg_desc, $1, AGG_STAR, NULL, "*");
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-    | agg_type LBRACE number RBRACE agg_list
+    | agg_type LBRACE number RBRACE attr_list
     		{
 			AggDesc agg_desc;
 			agg_desc_init_number(&agg_desc, $1, AGG_NUMBER, $3);
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-    | agg_type LBRACE ID RBRACE agg_list
+    | agg_type LBRACE ID RBRACE attr_list
     		{
 			AggDesc agg_desc;
 			agg_desc_init_string(&agg_desc, $1, AGG_FIELD, NULL, $3);
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-    | agg_type LBRACE ID DOT ID RBRACE agg_list
+    | agg_type LBRACE ID DOT ID RBRACE attr_list
     		{
 			AggDesc agg_desc;
 			agg_desc_init_string(&agg_desc, $1, AGG_FIELD, $3, $5);
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
     ;
+
 attr_list:
     /* empty */
     | COMMA ID attr_list {
@@ -486,29 +487,25 @@ attr_list:
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length].attribute_name=$4;
         // CONTEXT->ssql->sstr.selection.attributes[CONTEXT->select_length++].relation_name=$2;
   	  }
-  	;
-
-agg_list:
-	/* empty */
-	| COMMA agg_type LBRACE STAR RBRACE agg_list
+	| COMMA agg_type LBRACE STAR RBRACE attr_list
 		{
 			AggDesc agg_desc;
 			agg_desc_init_string(&agg_desc, $2, AGG_STAR, NULL, "*");
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-	| COMMA agg_type LBRACE number RBRACE agg_list
+	| COMMA agg_type LBRACE number RBRACE attr_list
 		{
 			AggDesc agg_desc;
 			agg_desc_init_number(&agg_desc, $2, AGG_NUMBER, $4);
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-	| COMMA agg_type LBRACE ID RBRACE agg_list
+	| COMMA agg_type LBRACE ID RBRACE attr_list
 		{
 			AggDesc agg_desc;
 			agg_desc_init_string(&agg_desc, $2, AGG_FIELD, NULL, $4);
 			selects_append_agg(&CONTEXT->ssql->sstr.selection, &agg_desc);
 		}
-	| COMMA agg_type LBRACE ID DOT ID RBRACE agg_list
+	| COMMA agg_type LBRACE ID DOT ID RBRACE attr_list
 		{
 			AggDesc agg_desc;
 			agg_desc_init_string(&agg_desc, $2, AGG_FIELD, $4, $6);
