@@ -18,16 +18,13 @@ public:
   virtual ~Aggregator() = default;
 
   virtual void consume(const Tuple &tuple) = 0;
-  virtual const TupleValue *result() const = 0;
+  virtual TupleValue *result() const = 0;
+  virtual void reset() = 0;
   const AggDesc &desc() const { return agg_desc_; }
   static RC check_operand_type_match_agg_type(const AggDesc &agg_desc);
   static RC check_field_type_match_agg_type(const AggDesc &agg_desc, const AttrType &attr_type);
 
 private:
-  const char *make_agg_field_name();
-
-  static const char *agg_type_names[];
-
   const AggDesc &agg_desc_;
 };
 
@@ -38,7 +35,8 @@ public:
     { }
 
   void consume(const Tuple &tuple) override { cnt_++; }
-  const TupleValue *result() const override { return new IntValue(cnt_); }
+  TupleValue *result() const override { return new IntValue(cnt_); }
+  void reset() override { cnt_ = 0; }
 
 private:
   int cnt_;
@@ -51,7 +49,8 @@ public:
     { }
 
   void consume(const Tuple &tuple) override { }
-  const TupleValue *result() const override { return new IntValue(const_val_); }
+  TupleValue *result() const override { return new IntValue(const_val_); }
+  void reset() override { }
 
 private:
   int const_val_;
@@ -80,7 +79,8 @@ public:
     }
   }
 
-  const TupleValue *result() const override { return max_->clone(); }
+  TupleValue *result() const override { return max_->clone(); }
+  void reset() override { max_ = nullptr; }
 
 private:
   const TupleValue *max_;
@@ -99,7 +99,8 @@ public:
     }
   }
 
-  const TupleValue *result() const override { return min_->clone(); }
+  TupleValue *result() const override { return min_->clone(); }
+  void reset() override { min_ = nullptr; }
 
 private:
   const TupleValue *min_;
@@ -110,7 +111,7 @@ private:
   typedef void (AvgAggregator::*acc_value_func_t)(const TupleValue &value);
 public:
   AvgAggregator(const AggDesc &agg_desc, int pos, AttrType attr_type)
-    : FieldAggregator(agg_desc, pos), cnt_(0), attr_type_(attr_type),
+    : FieldAggregator(agg_desc, pos), cnt_(0), int_sum_(0), attr_type_(attr_type),
       acc_value_(attr_type == INTS
         ? &AvgAggregator::acc_int
         : &AvgAggregator::acc_float)
@@ -121,13 +122,15 @@ public:
     cnt_++;
   }
 
-  const TupleValue *result() const override {
+  TupleValue *result() const override {
     if (attr_type_ == INTS) {
       return new IntValue(int_sum_ / cnt_);
     } else {
       return new FloatValue(float_sum_ / cnt_);
     }
   }
+
+  void reset() override { cnt_ = 0; int_sum_ = 0; }
 
 private:
   void acc_int(const TupleValue &value) {
@@ -140,7 +143,7 @@ private:
 
   int cnt_;
   union {
-    int int_sum_ = 0;
+    int int_sum_;
     float float_sum_;
   };
   AttrType attr_type_;

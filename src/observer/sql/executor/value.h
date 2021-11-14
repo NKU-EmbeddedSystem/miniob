@@ -31,6 +31,7 @@ public:
   virtual void to_string(std::ostream &os) const = 0;
   virtual int compare(const TupleValue &other) const = 0;
   virtual TupleValue *clone() const = 0;
+  virtual std::size_t hash() const = 0;
 
 private:
 };
@@ -50,6 +51,8 @@ public:
   }
 
   TupleValue *clone() const override { return new IntValue(value_); }
+
+  std::size_t hash() const override { return value_; }
 
   int get_value() const { return value_; }
 
@@ -88,6 +91,8 @@ public:
 
   TupleValue *clone() const override { return new FloatValue(value_); }
 
+  std::size_t hash() const override { return *reinterpret_cast<const std::size_t *>(&value_); }
+
   float get_value() const { return value_; }
 
 private:
@@ -111,6 +116,8 @@ public:
   }
 
   TupleValue *clone() const override { return new StringValue(value_.c_str()); }
+
+  std::size_t hash() const override { return std::hash<std::string>()(value_); }
 
 private:
   std::string value_;
@@ -141,6 +148,8 @@ public:
   }
 
   TupleValue *clone() const override { return new DateValue(value_); }
+
+  std::size_t hash() const override { return value_; }
 
   /**
    * validate string format.
@@ -179,6 +188,9 @@ public:
     TupleValue * clone() const override {
       return new NullValue();
     }
+
+  std::size_t hash() const override { return 0; }
+
 };
 
 #endif //__OBSERVER_SQL_EXECUTOR_VALUE_H_

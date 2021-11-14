@@ -24,6 +24,11 @@ RC QueryChecker::check_fields() {
     return rc;
   }
 
+  rc = check_group_by_fields();
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
   rc = (this->*check_select_list_fields_)();
   if (rc != RC::SUCCESS) {
     return rc;
@@ -114,6 +119,32 @@ RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType 
 
     if (attr_type != nullptr) {
       *attr_type = field_meta->type();
+    }
+  }
+
+  return RC::SUCCESS;
+}
+RC QueryChecker::check_group_by_fields() {
+  // bypass check
+  if (selects_.group_by_num == 0) {
+    return RC::SUCCESS;
+  }
+
+  // syntax check
+  if (!is_aggregation_query_) {
+    LOG_ERROR("GROUP BY on non-aggregation query.");
+    return RC::GENERIC_ERROR;
+  }
+
+  // field check
+  RC rc;
+
+  for (int i = 0; i < selects_.group_by_num; i++) {
+    const auto &rel_attr = selects_.group_by_attributes[i];
+
+    rc = (this->*relattr_match_table_)(rel_attr, nullptr);
+    if (rc != RC::SUCCESS) {
+      return rc;
     }
   }
 
