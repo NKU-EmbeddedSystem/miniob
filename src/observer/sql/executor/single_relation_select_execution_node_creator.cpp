@@ -181,37 +181,6 @@ static RC schema_add_field(const Table *table, const char *field_name, TupleSche
   return RC::SUCCESS;
 }
 
-static RC create_tuple_schema_from_aggregation_list(const Selects &selects, Table *table, TupleSchema &schema) {
-  int agg_num = selects.agg_num;
-  int schema_empty = true;
-
-  // try to add from aggregation field
-  for (int i = agg_num - 1; i >= 0; i--) {
-    const auto &agg_desc = selects.aggs[i];
-    if (agg_desc.agg_operand_type == AGG_FIELD) {
-      if (agg_desc.agg_attr.relation_name == nullptr) {
-        if (selects.relation_num > 1) {
-          return RC::INVALID_ARGUMENT;
-        }
-      } else {
-        if (strcmp(agg_desc.agg_attr.relation_name, table->name()) != 0) {
-          continue;
-        }
-      }
-      auto field_meta = table->table_meta().field(agg_desc.agg_attr.attribute_name);
-      schema_add_field(table, field_meta->name(), schema);
-      schema_empty = false;
-    }
-  }
-
-  // try to find from where conditions
-  if (schema_empty) {
-
-  }
-
-//  return create_tuple_schema_from_aggregation_list(table, schema);
-}
-
 RC SingleRelationSelectExeNodeCreator::create_tuple_schema_from_attribute_list(const Table *table, TupleSchema &schema) {
   auto table_name = table->name();
 
@@ -248,8 +217,18 @@ RC SingleRelationSelectExeNodeCreator::create_tuple_schema_from_aggregation_list
 
   // try to add from aggregation field
   rc = aggregation_list_extend_tuple_schema(table, schema);
-  if (rc == RC::SUCCESS || rc != RC::EMPTY) {
+  if (rc != RC::SUCCESS) {
     return rc;
+  }
+
+  // try to add from group by field
+  rc = group_by_extend_tuple_schema(table, schema);
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  if (!schema.fields().empty()) {
+    return RC::SUCCESS;
   }
 
   // if condition filter will later extend it, schema will later be filled
@@ -268,7 +247,7 @@ RC SingleRelationSelectExeNodeCreator::create_tuple_schema_from_aggregation_list
 }
 
 RC SingleRelationSelectExeNodeCreator::aggregation_list_extend_tuple_schema(const Table *table, TupleSchema &schema) {
-  RC rc = RC::EMPTY;
+  RC rc;
 
   for (int i = 0; i < selects_.agg_num; i++) {
     const auto &agg_desc = selects_.aggs[i];
@@ -281,7 +260,7 @@ RC SingleRelationSelectExeNodeCreator::aggregation_list_extend_tuple_schema(cons
     }
   }
 
-  return rc;
+  return RC::SUCCESS;
 }
 
 static bool relattr_refers_table(const RelAttr &rel_attr, const char *table_name) {
@@ -289,6 +268,22 @@ static bool relattr_refers_table(const RelAttr &rel_attr, const char *table_name
   // so here we only check name match
   return rel_attr.relation_name == nullptr
          || strcmp(rel_attr.relation_name, table_name) == 0;
+}
+
+RC SingleRelationSelectExeNodeCreator::group_by_extend_tuple_schema(const Table *table, TupleSchema &schema) {
+  RC rc;
+
+  for (int i = 0; i < selects_.group_by_num; i++) {
+    const auto &rel_attr = selects_.group_by_attributes[i];
+    if (relattr_refers_table(rel_attr, table->name())) {
+      rc = schema_add_field(table, rel_attr.attribute_name, schema);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    }
+  }
+
+  return RC::SUCCESS;
 }
 
 RC SingleRelationSelectExeNodeCreator::condition_filter_will_extend_tuple_schema(const Table *table, const TupleSchema &schema) {

@@ -32,6 +32,7 @@ public:
   virtual int compare(const TupleValue &other) const = 0;
   virtual TupleValue *clone() const = 0;
   virtual bool is_null() const = 0;
+  virtual std::size_t hash() const = 0;
 
 private:
 };
@@ -51,6 +52,8 @@ public:
     TupleValue * clone() const override {
       return new NullValue();
     }
+
+    std::size_t hash() const override { return 0; }
 
     bool is_null() const override{
       return true;
@@ -77,6 +80,8 @@ public:
   }
 
   TupleValue *clone() const override { return new IntValue(value_); }
+
+  std::size_t hash() const override { return value_; }
 
   int get_value() const { return value_; }
 
@@ -124,6 +129,8 @@ public:
 
   TupleValue *clone() const override { return new FloatValue(value_); }
 
+  std::size_t hash() const override { return *reinterpret_cast<const std::size_t *>(&value_); }
+
   float get_value() const { return value_; }
   bool is_null() const override{
     return false;
@@ -154,9 +161,13 @@ public:
   }
 
   TupleValue *clone() const override { return new StringValue(value_.c_str()); }
+
   bool is_null() const override{
     return false;
   }
+
+  std::size_t hash() const override { return std::hash<std::string>()(value_); }
+
 private:
   std::string value_;
 };
@@ -191,6 +202,8 @@ public:
   }
 
   TupleValue *clone() const override { return new DateValue(value_); }
+
+  std::size_t hash() const override { return value_; }
 
   /**
    * validate string format.

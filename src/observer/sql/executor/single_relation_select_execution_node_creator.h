@@ -40,6 +40,7 @@ private:
   bool match_table(const char *table_name_in_condition, const char *table_name_to_match);
   RC condition_filter_extend_tuple_schema(const Condition &condition, const char *table_name, TupleSchema &schema, int &extra_count);
   RC aggregation_list_extend_tuple_schema(const Table *table, TupleSchema &schema);
+  RC group_by_extend_tuple_schema(const Table *table, TupleSchema &schema);
   RC condition_filter_will_extend_tuple_schema(const Table *table, const TupleSchema &schema);
 
   const char *db_;
