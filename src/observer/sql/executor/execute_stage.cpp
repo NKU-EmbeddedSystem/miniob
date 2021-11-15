@@ -287,7 +287,7 @@ bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &s
   return true;
 }
 
-void add_result(TupleSet &res, Tuple &cur, const TupleSchema &schema) {
+void add_result(TupleSet &res, const Tuple &cur, const TupleSchema &schema) {
   Tuple added;
   const auto& target_schema = res.schema();
   for (int i = 0; i < target_schema.fields().size(); ++i) {
@@ -305,6 +305,14 @@ void add_result(TupleSet &res, Tuple &cur, const TupleSchema &schema) {
   res.add(std::move(added));
 }
 
+
+void format_tuple(TupleSet &res, TupleSet &cur)
+{
+  for (int i = 0; i < cur.size(); ++i) {
+    add_result(res, cur.get(i), cur.schema());
+  }
+}
+
 void connect_table(TupleSet &res, TupleSet &left, TupleSet &right, std::vector<Condition> &conditions) {
   for (int i = 0; i < left.size(); ++i) {
     for (int j = 0; j < right.size(); ++j) {
@@ -319,38 +327,43 @@ void connect_table(TupleSet &res, TupleSet &left, TupleSet &right, std::vector<C
     }
   }
 }
+
 /**
- * @param tuple_sets
- * @param index
+ * hash join两个表
  * @param res
- * @param cur
- * @param multiple_conditions
- * @param connect_schema
- * @param length
+ * @param left
+ * @param right
+ * @param conditions
  */
-void join_tables(TupleSet &res, TupleSet &left, TupleSet &right,
-                 std::vector<Condition> &conditions) {
+void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
+               std::vector<Condition> &conditions) {
+  // 设置结果集的schema
   TupleSchema schema;
   schema.append(left.schema());
   schema.append(right.schema());
   res.set_schema(schema);
 
+  // 把条件分为等号条件和非等号条件
   std::unordered_multimap<int, size_t> hash_map;
-  Condition condition;
-  for (int i = 0; i < conditions.size(); ++i) {
-    if (conditions[i].comp == EQUAL_TO) {
-      condition = conditions[i];
+  std::vector<Condition> join_conditions;
+  std::vector<Condition> connect_conditions;
+  for (auto & condition : conditions) {
+    if (condition.comp == EQUAL_TO) {
+      join_conditions.emplace_back(condition);
       break;
+    } else {
+      connect_conditions.emplace_back(condition);
     }
   }
 
-  if (condition.comp != EQUAL_TO) {
-    // 没有join的条件，全连接
+  if (join_conditions.empty()) {
+    // 如果没有等号的条件，那只能连接以后再筛选了
     connect_table(res, left, right, conditions);
     return;
   }
 
   // 找到左右连接所在的列
+  Condition &condition = join_conditions.front();
   int left_index = left.schema().index_of_field(condition.left_attr.attribute_name);
   int right_index = right.schema().index_of_field(condition.right_attr.attribute_name);
 
@@ -367,7 +380,7 @@ void join_tables(TupleSet &res, TupleSet &left, TupleSet &right,
       row.raw_values().insert(row.raw_values().end(), left.get(it->second).values().begin(), left.get(it->second).values().end());
       row.raw_values().insert(row.raw_values().end(), right.get(i).values().begin(), right.get(i).values().end());
       // 加个filter过滤后面的条件
-      if (filter(row, conditions, res.schema()))
+      if (filter(row, connect_conditions, res.schema()))
         res.add(std::move(row));
     }
   }
@@ -381,56 +394,19 @@ TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> 
     right = &tuple_sets[i];
     std::vector<Condition> left_right_conditions;
     for (auto &condition : multiple_conditions) {
-      if (left->schema().index_of_field(condition.left_attr.attribute_name, condition.left_attr.relation_name) >= 0 &&
-          right->schema().index_of_field(condition.right_attr.attribute_name, condition.right_attr.relation_name) >= 0) {
+      int left_exist = left->schema().index_of_field(condition.left_attr.relation_name, condition.left_attr.attribute_name);
+      int right_exist = right->schema().index_of_field(condition.right_attr.relation_name, condition.right_attr.attribute_name);
+      if (left_exist >=0 && right_exist >= 0) {
         left_right_conditions.emplace_back(condition);
       }
     }
-    join_tables(*res, *left, *right, left_right_conditions);
+    hash_join(*res, *left, *right, left_right_conditions);
     std::swap(left, res);
     res->clear();
   }
-  return res;
+  return left;
 }
 
-/**
- * 把res_set的多个表连接起来，筛选条件之后形成结果集
- * @param tuple_sets
- * @param index
- * @param res
- * @param cur
- * @param multiple_conditions
- * @param connect_schema
- */
-//void connect_tables(std::vector<TupleSet> &tuple_sets, int index, TupleSet &res, Tuple &cur,
-//                    std::vector<Condition> &multiple_conditions, const TupleSchema &connect_schema) {
-//  if (index >= tuple_sets.size()) {
-//    // 递归终点
-//    // TODO 加一个filter, filter成功了再加进结果集
-//    if (filter(cur, multiple_conditions, connect_schema)) {
-//      add_result(res, cur, connect_schema);
-//      // res.add(Tuple(cur));
-//    }
-//    return;
-//  }
-//
-//  TupleSet &tupleSet = tuple_sets[index];
-//  std::vector<Tuple> values = tupleSet.tuples(); // 所有行
-//  for (Tuple &value : values) {
-//    int length = value.size();
-//    // 一行
-//    // 把这一行的所有元素加进cur里面
-//    for (int i = 0; i < length; ++i) {
-//      cur.add(value.get_pointer(i));
-//    }
-//    // 递归下一层
-//    connect_tables(tuple_sets, index + 1, res, cur, multiple_conditions, connect_schema);
-//    // 把这一行的所有元素删除
-//    for (int i = 0; i< length; ++i) {
-//      cur.pop_back();
-//    }
-//  }
-//}
 
 #define RETURN_FAILURE \
 do {                  \
@@ -563,18 +539,16 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 
   std::stringstream ss;
   TupleSet *result_tuple_set;
-  TupleSet joined_tuple_set;
+  TupleSet *joined_tuple_set;
   if (tuple_sets.size() > 1) {
     // 本次查询了多张表，需要做join操作
     Tuple cur;
-    joined_tuple_set.set_schema(res_schema);
-
-    /*
-     * 现在结果集已经筛选了一个表的条件，然后还需要手动筛选两个表的条件
-     */
-//    connect_tables(tuple_sets, 0, joined_tuple_set, cur, multiple_conditions, connect_schema);
-    result_tuple_set = join_tables(tuple_sets, multiple_conditions);
-//    result_tuple_set = &joined_tuple_set;
+    // 表连接
+    joined_tuple_set = join_tables(tuple_sets, multiple_conditions);
+    // 筛列
+    result_tuple_set = new TupleSet();
+    result_tuple_set->set_schema(res_schema);
+    format_tuple(*result_tuple_set, *joined_tuple_set);
   } else {
     // 当前只查询一张表，直接返回结果即可
     result_tuple_set = &tuple_sets.front();
