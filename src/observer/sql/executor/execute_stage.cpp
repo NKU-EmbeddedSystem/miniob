@@ -346,13 +346,10 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
   // 把条件分为等号条件和非等号条件
   std::unordered_multimap<int, size_t> hash_map;
   std::vector<Condition> join_conditions;
-  std::vector<Condition> connect_conditions;
   for (auto & condition : conditions) {
     if (condition.comp == EQUAL_TO) {
       join_conditions.emplace_back(condition);
       break;
-    } else {
-      connect_conditions.emplace_back(condition);
     }
   }
 
@@ -380,7 +377,7 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
       row.raw_values().insert(row.raw_values().end(), left.get(it->second).values().begin(), left.get(it->second).values().end());
       row.raw_values().insert(row.raw_values().end(), right.get(i).values().begin(), right.get(i).values().end());
       // 加个filter过滤后面的条件
-      if (filter(row, connect_conditions, res.schema()))
+      if (filter(row, conditions, res.schema()))
         res.add(std::move(row));
     }
   }
