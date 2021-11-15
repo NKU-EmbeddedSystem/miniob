@@ -36,6 +36,7 @@ RC BplusTreeHandler::sync() {
   return disk_buffer_pool_->flush_all_pages(file_id_);
 }
 
+
 RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_length) {
   BPPageHandle page_handle;
   IndexNode *root;
