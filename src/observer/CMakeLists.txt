@@ -17,7 +17,7 @@ MESSAGE("MAIN SRC: " ${MAIN_SRC})
 FOREACH (F ${ALL_SRC})
 
     IF (NOT ${F} STREQUAL ${MAIN_SRC})
-        SET(LIB_SRC ${LIB_SRC} ${F} sql/executor/query_checker.cpp sql/executor/query_checker.h sql/executor/single_relation_select_execution_node_creator.cpp sql/executor/single_relation_select_execution_node_creator.h sql/executor/aggregator.cpp sql/executor/aggregator.h sql/executor/aggregation_executor.cpp sql/executor/aggregation_executor.h sql/executor/grouper.cpp sql/executor/grouper.h sql/executor/aggregator_manager.cpp sql/executor/aggregator_manager.h)
+        SET(LIB_SRC ${LIB_SRC} ${F} sql/executor/query_checker.cpp sql/executor/query_checker.h sql/executor/single_relation_select_execution_node_creator.cpp sql/executor/single_relation_select_execution_node_creator.h sql/executor/aggregator.cpp sql/executor/aggregator.h sql/executor/aggregation_executor.cpp sql/executor/aggregation_executor.h sql/executor/grouper.cpp sql/executor/grouper.h sql/executor/aggregator_manager.cpp sql/executor/aggregator_manager.h storage/common/list.h storage/default/bp_manager.cpp)
     ENDIF()
 
     MESSAGE("Use " ${F})
