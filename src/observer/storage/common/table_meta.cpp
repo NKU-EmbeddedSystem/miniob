@@ -30,6 +30,7 @@ TableMeta::TableMeta(const TableMeta &other) :
         name_(other.name_),
         fields_(other.fields_),
         indexes_(other.indexes_),
+        unique_indexes_(other.unique_indexes_),
         record_size_(other.record_size_){
 }
 

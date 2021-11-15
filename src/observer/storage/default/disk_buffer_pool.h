@@ -23,8 +23,10 @@ See the Mulan PSL v2 for more details. */
 #include <time.h>
 
 #include <vector>
+#include <unordered_map>
 
 #include "rc.h"
+#include "storage/common/list.h"
 
 typedef int PageNum;
 
@@ -34,7 +36,7 @@ typedef int PageNum;
 #define BP_PAGE_SIZE (1 << 20)
 #define BP_PAGE_DATA_SIZE (BP_PAGE_SIZE - sizeof(PageNum))
 #define BP_FILE_SUB_HDR_SIZE (sizeof(BPFileSubHeader))
-#define BP_BUFFER_SIZE 50
+#define BP_BUFFER_SIZE 100
 #define MAX_OPEN_FILE 1024
 
 typedef struct {
@@ -77,46 +79,51 @@ public:
   BPFileSubHeader *file_sub_header;
 } ;
 
+class DiskBufferPool;
+
 class BPManager {
-public:
-  BPManager(int size = BP_BUFFER_SIZE) {
-    this->size = size;
-    frame = new Frame[size];
-    allocated = new bool[size];
-    for (int i = 0; i < size; i++) {
-      allocated[i] = false;
-      frame[i].pin_count = 0;
-    }
-  }
+  struct LRUFrame {
+    Frame frame;
+    list_head list;
+    bool allocated;
+  };
 
-  ~BPManager() {
-    delete[] frame;
-    delete[] allocated;
-    size = 0;
-    frame = nullptr;
-    allocated = nullptr;
-  }
-
-  Frame *alloc() {
-    return nullptr; // TODO for test
-  }
-
-  Frame *get(int file_desc, PageNum page_num) {
-    return nullptr; // TODO for test
-  }
-
-  Frame *getFrame() { return frame; }
-
-  bool *getAllocated() { return allocated; }
+  using Key = unsigned long;
 
 public:
+  BPManager(DiskBufferPool *buffer_pool, int size);
+  ~BPManager();
+
+  Frame *alloc(int file_desc, PageNum page_num);
+  Frame *get(int file_desc, PageNum page_num);
+  RC dispose_block(Frame *buf);
+  RC dispose_page(int file_desc, PageNum page_num);
+  RC force_all_pages(int file_desc);
+
+private:
+  void lru_update(LRUFrame *lru_frame);
+  LRUFrame *find_unallocated();
+  LRUFrame *find(int file_desc, PageNum page_num);
+  LRUFrame *evict();
+
+  static Key key(int file_desc, PageNum page_num) {
+    return (static_cast<unsigned long>(file_desc) << 32) + static_cast<unsigned long>(page_num);
+  }
+
   int size;
-  Frame * frame = nullptr;
-  bool *allocated = nullptr;
+  DiskBufferPool *buffer_pool_;
+  list_head frame_list;
+  LRUFrame *frames;
+  std::unordered_map<Key, LRUFrame *> list_map;
 };
 
 class DiskBufferPool {
+  friend class BPManager;
 public:
+  explicit DiskBufferPool(int size = BP_BUFFER_SIZE)
+    : bp_manager_(this, size)
+    { }
+
   /**
   * 创建一个名称为指定文件名的分页文件
   */
@@ -162,13 +169,6 @@ public:
   RC dispose_page(int file_id, PageNum page_num);
 
   /**
-   * 释放指定文件关联的页的内存， 如果已经脏， 则刷到磁盘，除了pinned page
-   * @param file_handle
-   * @param page_num 如果不指定page_num 将刷新所有页
-   */
-  RC force_page(int file_id, PageNum page_num);
-
-  /**
    * 标记指定页面为“脏”页。如果修改了页面的内容，则应调用此函数，
    * 以便该页面被淘汰出缓冲区时系统将新的页面数据写入磁盘文件
    */
@@ -189,17 +189,10 @@ public:
 
   RC flush_all_pages(int file_id);
 
-protected:
-  RC allocate_block(Frame **buf);
-  RC dispose_block(Frame *buf);
+  BPManager &bp_manager() { return bp_manager_; }
 
-  /**
-   * 刷新指定文件关联的所有脏页到磁盘，除了pinned page
-   * @param file_handle
-   * @param page_num 如果不指定page_num 将刷新所有页
-   */
-  RC force_page(BPFileHandle *file_handle, PageNum page_num);
-  RC force_all_pages(BPFileHandle *file_handle);
+protected:
+  RC allocate_block(int file_desc, PageNum page_num, Frame **buf);
   RC check_file_id(int file_id);
   RC check_page_num(PageNum page_num, BPFileHandle *file_handle);
   RC load_page(PageNum page_num, BPFileHandle *file_handle, Frame *frame);
