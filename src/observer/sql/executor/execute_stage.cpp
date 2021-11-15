@@ -364,8 +364,8 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
 
   // 找到左右连接所在的列
   Condition &condition = join_conditions.front();
-  int left_index = left.schema().index_of_field(condition.left_attr.attribute_name);
-  int right_index = right.schema().index_of_field(condition.right_attr.attribute_name);
+  int left_index = left.schema().index_of_field(condition.left_attr.relation_name, condition.left_attr.attribute_name);
+  int right_index = right.schema().index_of_field(condition.right_attr.relation_name, condition.right_attr.attribute_name);
 
   // hash
   for (int i = 0; i < left.size(); ++i) {
