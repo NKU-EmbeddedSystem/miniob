@@ -47,6 +47,10 @@ public:
     return values_;
   }
 
+  std::vector<std::shared_ptr<TupleValue>> &raw_values() {
+    return values_;
+  }
+
   int size() const {
     return values_.size();
   }
@@ -144,6 +148,7 @@ public:
   TupleSet(TupleSet &&other);
   explicit TupleSet(const TupleSchema &schema) : schema_(schema) {
   }
+
   TupleSet &operator =(TupleSet &&other);
 
   ~TupleSet() = default;
