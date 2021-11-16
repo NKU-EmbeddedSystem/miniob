@@ -404,11 +404,37 @@ TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> 
   return left;
 }
 
+void free_subquery_helper(Subquery *subquery) {
+  printf("\tfree subquery\n");
+  for (int i = 0; i < subquery->condition_num; i++) {
+    Condition &condition = subquery->conditions[i];
+    if (is_subquery(&condition.left)) {
+      free_subquery_helper(condition.left.subquery);
+    }
+    if (is_subquery(&condition.right)) {
+      free_subquery_helper(condition.right.subquery);
+    }
+  }
+  free(subquery);
+}
+
+void free_subquery(Selects &selects) {
+  for (int i = 0; i < selects.condition_num; i++) {
+    Condition &condition = selects.conditions[i];
+    if (is_subquery(&condition.left)) {
+      free_subquery_helper(condition.left.subquery);
+    }
+    if (is_subquery(&condition.right)) {
+      free_subquery_helper(condition.right.subquery);
+    }
+  }
+}
 
 #define RETURN_FAILURE \
 do {                  \
   char response[] = "FAILURE\n"; \
   session_event->set_response(response); \
+  free_subquery(sql->sstr.selection); \
   return rc; \
 } while(0)
 
@@ -458,15 +484,44 @@ void push_orders(const Selects &selects, std::vector<Order> &orders) {
   }
 }
 
+void print_subquery(const std::string &prefix, const Condition conditions[], int num) {
+  for (int i = 0; i < num; i++) {
+    const Condition &cond = conditions[i];
+    std::cout << prefix << "left: " << cond.left.type << std::endl;
+    if (is_value(&cond.left)) {
+      std::cout << prefix << "[value]" << std::endl;
+    } else if (is_attr(&cond.left)) {
+      std::cout << prefix << "(" << ((cond.left.attr.relation_name ==
+              nullptr) ? "<nil>" : cond.left.attr.relation_name) << ", " << cond.left.attr.attribute_name << ")"<< std::endl;
+    } else {
+      print_subquery(prefix + "\t", cond.left.subquery->conditions, cond.left.subquery->condition_num);
+    }
+
+    std::cout << prefix << "right: " << cond.right.type << std::endl;
+    if (is_value(&cond.right)) {
+      std::cout << prefix << "[value]" << std::endl;
+    } else if (is_attr(&cond.right)) {
+      std::cout << prefix << "(" << ((cond.right.attr.relation_name ==
+      nullptr) ? "<nil>" : cond.right.attr.relation_name) << ", "<< cond.right.attr.attribute_name << ")" << std::endl;
+    } else {
+      print_subquery(prefix + "\t", cond.right.subquery->conditions, cond.right.subquery->condition_num);
+    }
+
+    std::cout << std::endl;
+  }
+}
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
 
+  printf("\tstart do_select\n");
   RC rc = RC::SUCCESS;
   Session *session = session_event->get_client()->session;
   Trx *trx = session->current_trx();
 
   const Selects &selects = sql->sstr.selection;
+  print_subquery("", selects.conditions, selects.condition_num);
   QueryChecker query_checker(db, selects);
   rc = query_checker.check_fields();
   if (rc != RC::SUCCESS) {
@@ -588,6 +643,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   }
   session_event->set_response(ss.str());
   end_trx_if_need(session, trx, true);
+  free_subquery(sql->sstr.selection);
   return rc;
 }
 

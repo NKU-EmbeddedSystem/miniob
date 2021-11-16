@@ -119,7 +119,7 @@ typedef struct {
   size_t order_num;
 } Selects;
 
-struct {
+struct Subquery {
   union {
     RelAttr   attribute;    // attrs in Select clause
     AggDesc   agg;          // descriptor for each aggregation operation
@@ -128,7 +128,7 @@ struct {
   char *    relations[MAX_NUM];     // relations in From clause
   size_t    condition_num;          // Length of conditions in Where clause
   Condition conditions[MAX_NUM];    // conditions in Where clause
-} Subquery;
+};
 
 // struct of insert
 typedef struct {
@@ -256,10 +256,13 @@ void value_destroy(Value *value);
 ConditionField *condition_field_init_value(Value *value);
 ConditionField *condition_field_init_attr(char *relation_name, char *attribute_name);
 ConditionField *condition_field_init_subquery(struct Subquery *subquery);
+void subquery_set_attribute(struct Subquery *subquery, RelAttr *rel_attr);
+void subquery_set_agg(struct Subquery *subquery, AggDesc *agg_desc);
+void subquery_append_relation(struct Subquery *subquery, const char *relation_name);
+void subquery_append_condition(struct Subquery *subquery, Condition *condition);
 inline int is_value(const ConditionField *condition_field) { return condition_field->type == COND_VALUE; }
 inline int is_attr(const ConditionField *condition_field) { return condition_field->type == COND_FIELD; }
 inline int is_subquery(const ConditionField *condition_field) { return condition_field->type == COND_SUBQUERY; }
-void subquery_destroy(struct Subquery *subquery);
 
 void condition_init(Condition *condition, ConditionField *left, ConditionField *right, CompOp comp);
 
