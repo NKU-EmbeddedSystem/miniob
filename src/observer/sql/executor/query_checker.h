@@ -34,6 +34,7 @@ private:
   RC nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
   RC check_from_relations_and_init_tables();
   RC check_where_fields();
+  RC check_subquery(const Subquery *subquery);
   RC check_group_by_fields();
   bool find_group_by_field_in_attribute_list(const RelAttr &group_by_field);
   RC check_attribute_list_fields();

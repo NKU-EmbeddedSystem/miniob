@@ -1,6 +1,7 @@
 
 %{
 
+#include "storage/common/list.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/parser/yacc_sql.tab.h"
 #include "sql/parser/lex.yy.h"
@@ -9,6 +10,11 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+
+typedef struct _SubqueryChain{
+	struct Subquery *subquery;
+	list_head list;
+} SubqueryChain;
 
 typedef struct ParserContext {
   Query * ssql;
@@ -19,6 +25,7 @@ typedef struct ParserContext {
   size_t order_length;
   Value values[MAX_NUM];
   Condition conditions[MAX_NUM];
+  list_head subquery_list;
   Order orders[MAX_NUM];
   CompOp comp;
   OrderType order_type;
@@ -43,6 +50,7 @@ void yyerror(yyscan_t scanner, const char *str)
   query_reset(context->ssql);
   context->ssql->flag = SCF_ERROR;
   context->condition_length = 0;
+  list_init(&context->subquery_list);
   context->from_length = 0;
   context->select_length = 0;
   context->value_length = 0;
@@ -59,6 +67,33 @@ ParserContext *get_context(yyscan_t scanner)
 
 #define CONTEXT get_context(scanner)
 
+#define list2subquery_chain(ptr) (container_of(SubqueryChain, list, ptr))
+#define subquery_chain_empty(context) (list_empty(&context->subquery_list))
+#define current_subquery_chain(context) (subquery_chain_empty(context) ? NULL : list2subquery_chain(context->subquery_list.next))
+#define current_subquery(context) (current_subquery_chain(context)->subquery)
+
+void push_subquery(ParserContext *context) {
+	printf("push subquery\n");
+	struct Subquery *subquery = (struct Subquery *)malloc(sizeof(struct Subquery));
+	SubqueryChain *chain = (SubqueryChain *)malloc(sizeof(SubqueryChain));
+	memset(subquery, 0, sizeof(struct Subquery));
+	memset(chain, 0, sizeof(SubqueryChain));
+	chain->subquery = subquery;
+	list_add(&context->subquery_list, &chain->list);
+	printf("after subquery\n");
+}
+
+struct Subquery *pop_subquery(ParserContext *context) {
+	printf("pop subquery\n");
+	SubqueryChain *chain = current_subquery_chain(context);
+	if (chain == NULL) {
+		return NULL;
+	}
+	struct Subquery *ret = chain->subquery;
+	list_delete(&chain->list);
+	free(chain);
+	return ret;
+}
 %}
 
 %define api.pure full
@@ -152,6 +187,7 @@ ParserContext *get_context(yyscan_t scanner)
 %type <number> agg_type
 %type <ptr> condition_field
 %type <condition1> condition
+%type <ptr> subquery
 %type <value1> value
 %type <number> number
 %type <number> order_type
@@ -557,95 +593,133 @@ condition_list:
 condition_field:
 	value {
 		$$ = condition_field_init_value(&CONTEXT->values[CONTEXT->value_length - 1]);
+		printf("\tcond field collect value -> %p\n", $$);
 	}
 	| ID {
 		$$ = condition_field_init_attr(NULL, $1);
+		printf("\tcond field collect ID: <nil>.%s -> %p\n", $1, $$);
 	}
 	| ID DOT ID {
 		$$ = condition_field_init_attr($1, $3);
+		printf("\tcond field collect ID: %s.%s -> %p\n", $1, $3, $$);
+	}
+	| LBRACE subquery RBRACE {
+		$$ = condition_field_init_subquery($2);
+		printf("\tcond field collect subquery -> %p\n", $$);
 	}
 	;
+
 condition:
 	condition_field comOp condition_field {
 		Condition condition;
+		printf("\tcond combine (%p, %p)\n", $1, $3);
 		condition_init(&condition, $1, $3, CONTEXT->comp);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 	}
 	;
-//    ID comOp value
-//		{
-//			RelAttr left_attr;
-//			relation_attr_init(&left_attr, NULL, $1);
-//
-//			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//		}
-//    | value comOp value
-//		{
-//			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 2];
-//			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 0, NULL, right_value);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//		}
-//    | ID comOp ID
-//		{
-//			RelAttr left_attr;
-//			relation_attr_init(&left_attr, NULL, $1);
-//			RelAttr right_attr;
-//			relation_attr_init(&right_attr, NULL, $3);
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//		}
-//    | value comOp ID
-//		{
-//			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
-//			RelAttr right_attr;
-//			relation_attr_init(&right_attr, NULL, $3);
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//		}
-//    | ID DOT ID comOp value
-//		{
-//			RelAttr left_attr;
-//			relation_attr_init(&left_attr, $1, $3);
-//			Value *right_value = &CONTEXT->values[CONTEXT->value_length - 1];
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 0, NULL, right_value);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//    }
-//    |value comOp ID DOT ID
-//		{
-//			Value *left_value = &CONTEXT->values[CONTEXT->value_length - 1];
-//
-//			RelAttr right_attr;
-//			relation_attr_init(&right_attr, $3, $5);
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 0, NULL, left_value, 1, &right_attr, NULL);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//    }
-//    |ID DOT ID comOp ID DOT ID
-//		{
-//			RelAttr left_attr;
-//			relation_attr_init(&left_attr, $1, $3);
-//			RelAttr right_attr;
-//			relation_attr_init(&right_attr, $5, $7);
-//
-//			Condition condition;
-//			condition_init(&condition, CONTEXT->comp, 1, &left_attr, NULL, 1, &right_attr, NULL);
-//			CONTEXT->conditions[CONTEXT->condition_length++] = condition;
-//    }
-//    ;
+
+subquery:
+    SELECT subquery_select_attr FROM ID subquery_join_list subquery_rel_list subquery_where {
+    			printf("subquery child access from subquery\n");
+			subquery_append_relation(current_subquery(CONTEXT), $4);
+			$$ = pop_subquery(CONTEXT);
+	}
+	;
+
+subquery_select_attr:
+	STAR {
+			push_subquery(CONTEXT);
+			RelAttr attr;
+			printf("before init\n");
+			relation_attr_init(&attr, NULL, "*");
+    			printf("subquery child access from start\n");
+    			printf("empty: %d", list_empty(&CONTEXT->subquery_list));
+			subquery_set_attribute(current_subquery(CONTEXT), &attr);
+    			printf("after subquery child access from start\n");
+	}
+	| ID {
+			push_subquery(CONTEXT);
+			RelAttr attr;
+			relation_attr_init(&attr, NULL, $1);
+			subquery_set_attribute(current_subquery(CONTEXT), &attr);
+	}
+	| ID DOT ID {
+			push_subquery(CONTEXT);
+			RelAttr attr;
+			relation_attr_init(&attr, $1, $3);
+			subquery_set_attribute(current_subquery(CONTEXT), &attr);
+	}
+	| agg_type LBRACE STAR RBRACE {
+			push_subquery(CONTEXT);
+			AggDesc agg_desc;
+			agg_desc_init_string(&agg_desc, $1, AGG_STAR, NULL, "*");
+			subquery_set_agg(current_subquery(CONTEXT), &agg_desc);
+	}
+	| agg_type LBRACE number RBRACE {
+			push_subquery(CONTEXT);
+			AggDesc agg_desc;
+			agg_desc_init_number(&agg_desc, $1, AGG_NUMBER, $3);
+			subquery_set_agg(current_subquery(CONTEXT), &agg_desc);
+	}
+	| agg_type LBRACE ID RBRACE {
+			push_subquery(CONTEXT);
+			AggDesc agg_desc;
+			agg_desc_init_string(&agg_desc, $1, AGG_FIELD, NULL, $3);
+			subquery_set_agg(current_subquery(CONTEXT), &agg_desc);
+	}
+   	| agg_type LBRACE ID DOT ID RBRACE {
+			push_subquery(CONTEXT);
+			AggDesc agg_desc;
+			agg_desc_init_string(&agg_desc, $1, AGG_FIELD, $3, $5);
+			subquery_set_agg(current_subquery(CONTEXT), &agg_desc);
+	}
+	;
+
+subquery_join_list:
+	// empty
+	| INNER JOIN ID ON subquery_condition subquery_condition_list subquery_join_list {
+    			printf("subquery child access from subquery_join_list\n");
+		subquery_append_relation(current_subquery(CONTEXT), $3);
+	}
+	;
+
+subquery_rel_list:
+    	/* empty */
+    	| COMMA ID subquery_join_list subquery_rel_list {
+    			printf("subquery child access from subquery_rel_list\n");
+		subquery_append_relation(current_subquery(CONTEXT), $2);
+	}
+	;
+
+subquery_where:
+	/* empty */
+     	| WHERE subquery_condition subquery_condition_list {
+		// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+	}
+   	;
+
+subquery_condition:
+	condition_field comOp condition_field {
+    			printf("subquery child access from subquery_condition\n");
+		Condition condition;
+		printf("\tcond combine (%p, %p)\n", $1, $3);
+		ConditionField *left = (ConditionField *)$1;
+		ConditionField *right = (ConditionField *)$3;
+		if (is_attr(left) && is_attr(right)) {
+			printf("\t\tleft: %s.%s\n", left->attr.relation_name, left->attr.attribute_name);
+			printf("\t\tright: %s.%s\n", right->attr.relation_name, right->attr.attribute_name);
+		}
+		condition_init(&condition, $1, $3, CONTEXT->comp);
+		subquery_append_condition(current_subquery(CONTEXT), &condition);
+	}
+	;
+
+subquery_condition_list:
+	/* empty */
+    	| AND subquery_condition subquery_condition_list {
+		// CONTEXT->conditions[CONTEXT->condition_length++]=*$2;
+	}
+	;
 
 group_by:
 	/* empty */
@@ -758,6 +832,7 @@ extern void scan_string(const char *str, yyscan_t scanner);
 int sql_parse(const char *s, Query *sqls){
 	ParserContext context;
 	memset(&context, 0, sizeof(context));
+	list_init(&context.subquery_list);
 
 	yyscan_t scanner;
 	yylex_init_extra(&context, &scanner);

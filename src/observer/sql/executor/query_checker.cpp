@@ -59,6 +59,8 @@ RC QueryChecker::check_from_relations_and_init_tables() {
   return RC::SUCCESS;
 }
 
+
+
 RC QueryChecker::check_where_fields() {
   RC rc;
 
@@ -70,10 +72,20 @@ RC QueryChecker::check_where_fields() {
       if (rc != RC::SUCCESS) {
         return rc;
       }
+    } else if (is_subquery(&condition.left)) {
+      rc = check_subquery(condition.left.subquery);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
     }
 
     if (is_attr(&condition.right)) {
       rc = (this->*relattr_match_table_)(condition.right.attr, nullptr);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    } else if (is_subquery(&condition.right)) {
+      rc = check_subquery(condition.left.subquery);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -129,6 +141,12 @@ RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType 
 
   return RC::SUCCESS;
 }
+
+RC QueryChecker::check_subquery(const Subquery *subquery) {
+
+  return RC::SUCCESS;
+}
+
 RC QueryChecker::check_group_by_fields() {
   // bypass check
   if (selects_.group_by_num == 0) {
