@@ -487,6 +487,7 @@ void push_orders(const Selects &selects, std::vector<Order> &orders) {
 void print_subquery(const std::string &prefix, const Condition conditions[], int num) {
   for (int i = 0; i < num; i++) {
     const Condition &cond = conditions[i];
+    printf("cond: %p\n", &cond);
     std::cout << prefix << "left: " << cond.left.type << std::endl;
     if (is_value(&cond.left)) {
       std::cout << prefix << "[value]" << std::endl;
@@ -504,6 +505,7 @@ void print_subquery(const std::string &prefix, const Condition conditions[], int
       std::cout << prefix << "(" << ((cond.right.attr.relation_name ==
       nullptr) ? "<nil>" : cond.right.attr.relation_name) << ", "<< cond.right.attr.attribute_name << ")" << std::endl;
     } else {
+      printf("right: %p\n", cond.right.subquery);
       print_subquery(prefix + "\t", cond.right.subquery->conditions, cond.right.subquery->condition_num);
     }
 
@@ -522,6 +524,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 
   const Selects &selects = sql->sstr.selection;
   print_subquery("", selects.conditions, selects.condition_num);
+  printf("before checker\n");
   QueryChecker query_checker(db, selects);
   rc = query_checker.check_fields();
   if (rc != RC::SUCCESS) {

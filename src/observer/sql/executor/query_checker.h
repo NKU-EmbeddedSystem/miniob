@@ -20,7 +20,7 @@ private:
 
 public:
   QueryChecker(const char *db, const Selects &selects)
-    : db_(db), selects_(selects), is_aggregation_query_(selects.agg_num > 0),
+    : db_(db), selects_(selects), local_tables_(&global_tables_), is_aggregation_query_(selects.agg_num > 0),
       relattr_match_table_(
               (selects.relation_num > 1)
               ? &QueryChecker::non_nullable_relattr_match_any_table
@@ -32,9 +32,17 @@ public:
 private:
   RC non_nullable_relattr_match_any_table(const RelAttr &rel_attr, AttrType *attr_type);
   RC nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
-  RC check_from_relations_and_init_tables();
-  RC check_where_fields();
-  RC check_subquery(const Subquery *subquery);
+  RC check_from_relations_and_init_tables() { return check_from_relations_and_init_tables_helper(selects_.relations, selects_.relation_num); }
+  RC check_from_relations_and_init_tables_helper(const char * const relations[], int relation_num);
+  RC check_where_fields() { return check_where_fields_helper(selects_.conditions, selects_.condition_num); }
+  RC check_where_fields_helper(const Condition conditions[], int condition_num);
+  RC check_subquery(const Subquery *subquery, CompOp comp, bool left);
+  RC check_subquery_position(CompOp comp, bool left);
+  RC check_subquery_result_type(const Subquery *subquery, CompOp comp);
+  RC check_subquery_where_fields(const Subquery *subquery);
+  RC subquery_condition_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
+  RC check_subquery_select_attribute(const Subquery *subquery);
+  RC subquery_select_attr_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
   RC check_group_by_fields();
   bool find_group_by_field_in_attribute_list(const RelAttr &group_by_field);
   RC check_attribute_list_fields();
@@ -42,7 +50,8 @@ private:
 
   const char *db_;
   const Selects &selects_;
-  vector<Table *> tables_;
+  vector<Table *> global_tables_;
+  vector<Table *> *local_tables_;
   bool is_aggregation_query_;
   relattr_match_func_t relattr_match_table_;
 };

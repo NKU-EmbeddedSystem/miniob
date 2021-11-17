@@ -27,7 +27,6 @@ typedef struct ParserContext {
   Condition conditions[MAX_NUM];
   list_head subquery_list;
   Order orders[MAX_NUM];
-  CompOp comp;
   OrderType order_type;
 	char id[MAX_NUM];
 } ParserContext;
@@ -187,6 +186,7 @@ struct Subquery *pop_subquery(ParserContext *context) {
 %type <number> agg_type
 %type <ptr> condition_field
 %type <condition1> condition
+%type <number> comOp
 %type <ptr> subquery
 %type <value1> value
 %type <number> number
@@ -613,7 +613,7 @@ condition:
 	condition_field comOp condition_field {
 		Condition condition;
 		printf("\tcond combine (%p, %p)\n", $1, $3);
-		condition_init(&condition, $1, $3, CONTEXT->comp);
+		condition_init(&condition, $1, $3, $2);
 		CONTEXT->conditions[CONTEXT->condition_length++] = condition;
 	}
 	;
@@ -709,7 +709,7 @@ subquery_condition:
 			printf("\t\tleft: %s.%s\n", left->attr.relation_name, left->attr.attribute_name);
 			printf("\t\tright: %s.%s\n", right->attr.relation_name, right->attr.attribute_name);
 		}
-		condition_init(&condition, $1, $3, CONTEXT->comp);
+		condition_init(&condition, $1, $3, $2);
 		subquery_append_condition(current_subquery(CONTEXT), &condition);
 	}
 	;
@@ -750,16 +750,16 @@ group_by_attr_list:
   	;
 
 comOp:
-    EQ { CONTEXT->comp = EQUAL_TO; }
-    | LT { CONTEXT->comp = LESS_THAN; }
-    | GT { CONTEXT->comp = GREAT_THAN; }
-    | LE { CONTEXT->comp = LESS_EQUAL; }
-    | GE { CONTEXT->comp = GREAT_EQUAL; }
-    | NE { CONTEXT->comp = NOT_EQUAL; }
-    | IS { CONTEXT->comp = IS_OP;}
-    | IS NOT { CONTEXT->comp = IS_NOT_OP;}
-    | IN { CONTEXT->comp = COND_IN; }
-    | NOT IN { CONTEXT->comp = NOT_IN; }
+    EQ { $$ = EQUAL_TO; }
+    | LT { $$ = LESS_THAN; }
+    | GT { $$ = GREAT_THAN; }
+    | LE { $$ = LESS_EQUAL; }
+    | GE { $$ = GREAT_EQUAL; }
+    | NE { $$ = NOT_EQUAL; }
+    | IS { $$ = IS_OP;}
+    | IS NOT { $$ = IS_NOT_OP;}
+    | IN { $$ = COND_IN; }
+    | NOT IN { $$ = NOT_IN; }
     ;
 
 load_data:

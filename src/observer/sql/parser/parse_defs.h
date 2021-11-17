@@ -120,10 +120,12 @@ typedef struct {
 } Selects;
 
 struct Subquery {
+  int is_agg;
   union {
     RelAttr   attribute;    // attrs in Select clause
     AggDesc   agg;          // descriptor for each aggregation operation
   };
+  void *result;
   size_t    relation_num;           // Length of relations in Fro clause
   char *    relations[MAX_NUM];     // relations in From clause
   size_t    condition_num;          // Length of conditions in Where clause

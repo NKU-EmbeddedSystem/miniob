@@ -113,9 +113,11 @@ ConditionField *condition_field_init_subquery(Subquery *subquery) {
 
 void subquery_set_attribute(Subquery *subquery, RelAttr *rel_attr) {
   printf("subquery: %p\n", subquery);
+  subquery->is_agg = false;
   subquery->attribute = *rel_attr;
 }
 void subquery_set_agg(Subquery *subquery, AggDesc *agg_desc) {
+  subquery->is_agg = true;
   subquery->agg = *agg_desc;
 }
 void subquery_append_relation(Subquery *subquery, const char *relation_name) {
