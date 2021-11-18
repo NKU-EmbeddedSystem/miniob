@@ -99,12 +99,12 @@ bool SingleRelationSelectExeNodeCreator::condition_refers_single_table(
         const char *table_name) {
   return (!is_attr(&condition.left) && !is_attr(&condition.right)) // 两边都是不是属性
          || (is_attr(&condition.left) && !is_attr(&condition.right)
-             && match_table(condition.left.attr.relation_name, table_name)) // 左边是属性右边不是
+             && (match_table(condition.left.attr.relation_name, table_name) || condition.left.refers_outer)) // 左边是属性右边不是
          || (!is_attr(&condition.left) && is_attr(&condition.right)
-             && match_table(condition.right.attr.relation_name, table_name)) // 左边不是属性，右边是属性
+             && (match_table(condition.right.attr.relation_name, table_name) || condition.right.refers_outer)) // 左边不是属性，右边是属性
          || (is_attr(&condition.left) && is_attr(&condition.right)
-             && match_table(condition.left.attr.relation_name, table_name)
-             && match_table(condition.right.attr.relation_name, table_name)); // 左右都是属性，并且表名都符合
+             && (match_table(condition.left.attr.relation_name, table_name) || condition.left.refers_outer)
+             && (match_table(condition.right.attr.relation_name, table_name) || condition.right.refers_outer)); // 左右都是属性，并且表名都符合
 }
 
 bool SingleRelationSelectExeNodeCreator::match_table(
@@ -121,6 +121,7 @@ static RC push_single_table_filter(const Condition &condition, const Table *tabl
   DefaultConditionFilter *condition_filter = new DefaultConditionFilter();
   RC rc = condition_filter->init(*table, condition);
   if (rc != RC::SUCCESS) {
+    LOG_ERROR("Fail at condition_filter->init");
     delete condition_filter;
     for (DefaultConditionFilter * &filter : condition_filters) {
       delete filter;

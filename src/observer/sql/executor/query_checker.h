@@ -34,8 +34,8 @@ private:
   RC nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
   RC check_from_relations_and_init_tables() { return check_from_relations_and_init_tables_helper(selects_.relations, selects_.relation_num); }
   RC check_from_relations_and_init_tables_helper(const char * const relations[], int relation_num);
-  RC check_where_fields() { return check_where_fields_helper(selects_.conditions, selects_.condition_num); }
-  RC check_where_fields_helper(const Condition conditions[], int condition_num);
+  RC check_where_fields() { return check_where_fields_helper(selects_.conditions, selects_.condition_num, false); }
+  RC check_where_fields_helper(const Condition conditions[], int condition_num, bool subquery_is_agg);
   RC check_and_push_extra_in_comparator_condition(const Condition &condition);
   bool is_checking_subquery() { return local_tables_ != &global_tables_; }
   RC check_subquery_condition_makes_sense(const Condition &condition);
