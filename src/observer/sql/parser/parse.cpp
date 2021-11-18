@@ -183,6 +183,29 @@ void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType ag
   agg_desc->number = number;
 }
 
+const char *comp_op_name(CompOp comp) {
+  static const char *comp_op_names[] = {
+          [EQUAL_TO] = "=",
+          [LESS_EQUAL] = "<=",
+          [NOT_EQUAL] = "<>",
+          [LESS_THAN] = "<",
+          [GREAT_EQUAL] = ">=",
+          [GREAT_THAN] = ">",
+          [NO_OP] = "nop",
+          [IS_OP] = "is",
+          [IS_NOT_OP] = "is not",
+          [COND_IN] = "in",
+          [NOT_IN] = "not in",
+  };
+
+  if (comp < EQUAL_TO || comp > NOT_IN) {
+    LOG_ERROR("Unsupported aggregation type: %d", comp);
+    return nullptr;
+  }
+
+  return comp_op_names[comp];
+}
+
 const char *agg_type_name(AggType agg_type) {
   static const char *agg_type_names[] = {
     [AGG_MAX] = "max",

@@ -58,4 +58,10 @@ static inline RC schema_add_field(Table *table, const char *field_name, TupleSch
   schema.add_if_not_exists(field_meta->type(), table->name(), field_meta->name());
   return RC::SUCCESS;
 }
+
+void set_multiple_schema(TupleSchema &schema, const Selects &selects, const char *db);
+RC create_multiple_selector(const Selects &selects, std::vector<Condition> &multiple_conditions);
+TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> &multiple_conditions);
+void format_tuple(TupleSet &res, TupleSet &cur);
+
 #endif //__OBSERVER_SQL_EXECUTE_STAGE_H__

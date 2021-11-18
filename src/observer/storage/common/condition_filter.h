@@ -17,18 +17,24 @@ See the Mulan PSL v2 for more details. */
 
 #include "rc.h"
 #include "sql/parser/parse.h"
+#include "sql/parser/parse_defs.h"
 
 struct Record;
 class Table;
 
 struct ConDesc {
-  bool   is_attr;     // 是否属性，false 表示是值
+  ConditionFieldType type;
   int    attr_length; // 如果是属性，表示属性值长度
   int    attr_offset; // 如果是属性，表示在记录中的偏移量
   void   *value;      // 如果是值类型，这里记录值的数据
   bool   nullable_;    // 如果是属性的话表示一下是否可以为空
   bool   isnull_;
+  Subquery *subquery;
 };
+
+inline bool is_value(const ConDesc &cond_desc) { return cond_desc.type == COND_VALUE; }
+inline bool is_attr(const ConDesc &cond_desc) { return cond_desc.type == COND_FIELD; }
+inline bool is_subquery(const ConDesc &cond_desc) { return cond_desc.type == COND_SUBQUERY; }
 
 class ConditionFilter {
 public:
@@ -65,11 +71,15 @@ public:
     return comp_op_;
   }
 
+  int subquery_filter(const Record &rec, bool *has_null) const;
+
 private:
   ConDesc  left_;
   ConDesc  right_;
   AttrType attr_type_ = UNDEFINED;
   CompOp   comp_op_ = NO_OP;
+  bool float_int_ = false;
+  bool int_left_ = false;
 };
 
 class CompositeConditionFilter : public ConditionFilter {

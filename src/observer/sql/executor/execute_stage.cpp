@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Longda on 2021/4/13.
 //
 
+#include <cstdlib>
 #include <string>
 #include <algorithm>
 
@@ -29,8 +30,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/executor/grouper.h"
 #include "sql/executor/query_checker.h"
 #include "sql/executor/single_relation_select_execution_node_creator.h"
+#include "sql/executor/subquery.h"
 #include "storage/default/default_handler.h"
-#include <cstdlib>
 
 using namespace common;
 
@@ -221,6 +222,7 @@ RC create_multiple_selector(const Selects &selects, std::vector<Condition> &mult
 bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &schema) {
   for (int i = 0; i < conditions.size(); ++i) {
     Condition &condition = conditions[i];
+    printf("filter comp[%d]: %s, total cnt: %d\n", i, comp_op_name(condition.comp), conditions.size());
     char *left_attr_name = condition.left.attr.attribute_name;
     char *right_attr_name = condition.right.attr.attribute_name;
     int left_idx = schema.index_of_field(condition.left.attr.relation_name, left_attr_name);
@@ -235,7 +237,7 @@ bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &s
 
     bool left_isnull = left_val.is_null();
     bool right_isnull =right_val.is_null();
-
+    printf("left/right is null: %d %d\n", left_isnull, right_isnull);
     auto comp_op_ = condition.comp;
     if (comp_op_ != IS_OP && comp_op_ != IS_NOT_OP) {
       if (left_isnull || right_isnull)
@@ -253,6 +255,7 @@ bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &s
     }
 
     int cmp_result = left_val.compare(right_val);
+    printf("cmp_result: %d\n", cmp_result);
     switch (condition.comp) {
       case EQUAL_TO:
         if (cmp_result != 0)
@@ -267,7 +270,7 @@ bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &s
           return false;
         break;
       case LESS_THAN:
-        if (cmp_result > 0)
+        if (cmp_result >= 0)
           return false;
         break;
       case GREAT_EQUAL:
@@ -353,6 +356,7 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
     }
   }
 
+  printf("join condition cnt: %d\n", join_conditions.size());
   if (join_conditions.empty()) {
     // 如果没有等号的条件，那只能连接以后再筛选了
     connect_table(res, left, right, conditions);
@@ -371,13 +375,22 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
 
   // map
   for (int i = 0; i < right.size(); ++i) {
+    printf("mapping right: [%d] total: %d\n", i, right.size());
     auto range = hash_map.equal_range(right.get(i).get(right_index).hash());
     for (auto it = range.first; it != range.second; ++it) {
       Tuple row;
-      row.raw_values().insert(row.raw_values().end(), left.get(it->second).values().begin(), left.get(it->second).values().end());
-      row.raw_values().insert(row.raw_values().end(), right.get(i).values().begin(), right.get(i).values().end());
+      row.raw_values().insert(
+              row.raw_values().end(),
+              left.get(it->second).values().begin(),
+              left.get(it->second).values().end());
+      row.raw_values().insert(
+              row.raw_values().end(),
+              right.get(i).values().begin(),
+              right.get(i).values().end());
       // 加个filter过滤后面的条件
-      if (filter(row, conditions, res.schema()))
+      bool result = filter(row, conditions, res.schema());
+      printf("\tfilter result: %d\n", result);
+      if (result)
         res.add(std::move(row));
     }
   }
@@ -393,6 +406,22 @@ TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> 
     for (auto &condition : multiple_conditions) {
       int left_exist = left->schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
       int right_exist = right->schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
+      if (left_exist < 0 && right_exist < 0) {
+        int left_inv_exist = left->schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
+        int right_inv_exist = right->schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
+        if (left_inv_exist >= 0 && right_inv_exist >= 0) {
+          ConditionField tmp = condition.left;
+          condition.left = condition.right;
+          condition.right = tmp;
+          left_exist = 0;
+          right_exist = 0;
+        }
+      }
+      printf("condition check: (%s.%s %s %s.%s) = (%d, %d)\n",
+             condition.left.attr.relation_name, condition.left.attr.attribute_name,
+             comp_op_name(condition.comp),
+             condition.right.attr.relation_name, condition.right.attr.attribute_name,
+             left_exist, right_exist);
       if (left_exist >=0 && right_exist >= 0) {
         left_right_conditions.emplace_back(condition);
       }
@@ -413,6 +442,20 @@ void free_subquery_helper(Subquery *subquery) {
     }
     if (is_subquery(&condition.right)) {
       free_subquery_helper(condition.right.subquery);
+    }
+  }
+
+  if (subquery->result != nullptr) {
+    if (subquery->is_agg) {
+      TupleValue *value = static_cast<TupleValue *>(subquery->result);
+      delete value;
+    } else {
+      using Set = std::unordered_set<TupleValue *, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
+      Set *set = static_cast<Set *>(subquery->result);
+      for (auto ptr : *set) {
+        delete ptr;
+      }
+      delete set;
     }
   }
   free(subquery);
@@ -531,6 +574,13 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
     RETURN_FAILURE;
   }
 
+  printf("before evaluate conditions\n");
+  rc = evaluate_conditions(sql->sstr.selection.conditions, sql->sstr.selection.condition_num, db, trx);
+  if (rc != RC::SUCCESS) {
+    RETURN_FAILURE;
+  }
+  printf("after evaluate conditions\n");
+
   vector<Order> orders;
   push_orders(selects, orders);
   std::reverse(orders.begin(), orders.end());
@@ -630,7 +680,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
       if (rc != RC::SUCCESS) {
         ROLL_BACK_SELECT_EXE_NODES;
       }
-
+//      agg_tuple_set.prune_null();
       agg_tuple_set.print(ss);
     }
   } else {
@@ -659,6 +709,10 @@ RC create_multiple_selector(const Selects &selects, std::vector<Condition> &mult
     // 左右都是表名而且不一样
     if (is_attr(&condition.left) && is_attr(&condition.right) &&
       strcmp(condition.left.attr.relation_name, condition.right.attr.relation_name) != 0) {
+      printf("\tget multiple table condition: %d = (%s.%s %s %s.%s)\n", i,
+             condition.left.attr.relation_name, condition.left.attr.attribute_name,
+             comp_op_name(condition.comp),
+             condition.right.attr.relation_name, condition.right.attr.attribute_name);
       multiple_conditions.push_back(condition);
     }
   }

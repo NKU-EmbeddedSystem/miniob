@@ -16,11 +16,27 @@
 
 #define pop_local_tables() local_tables_ = tables_save
 
-#define push_match_func() \
+#define push_match_func_and_global_table() \
+  for (auto table : *local_tables_) { \
+    global_tables_.push_back(table); \
+  }                                        \
+  int push_cnt = local_tables_->size();                                        \
   relattr_match_func_t match_func_save = relattr_match_table_; \
-  relattr_match_table_ = &QueryChecker::subquery_condition_nullable_relattr_match_table
+  relattr_match_table_ = &QueryChecker::non_nullable_relattr_match_any_table
 
-#define pop_match_func() relattr_match_table_ = match_func_save
+#define pop_match_func_and_global_table() \
+  for (int i = 0; i < push_cnt; i++) { \
+    global_tables_.pop_back(); \
+  } \
+  relattr_match_table_ = match_func_save
+
+static inline bool refers(const char *relation_name, const char *table_name) {
+  return strcmp(relation_name, table_name) == 0;
+}
+
+static inline bool refers(const char *relation_name, const Table *table) {
+  return strcmp(relation_name, table->name()) == 0;
+}
 
 RC QueryChecker::check_fields() {
   RC rc;
@@ -56,6 +72,11 @@ RC QueryChecker::check_fields() {
 RC QueryChecker::check_from_relations_and_init_tables_helper(const char *const relations[], int relation_num) {
   Table *table;
 
+  if (relation_num == 0) {
+    LOG_ERROR("Illegal sql: empty FROM relations");
+    return RC::SQL_SYNTAX;
+  }
+
   // check FROM relations existence
   for (int i = 0; i < relation_num; i++) {
     const char *relation_name = relations[i];
@@ -79,9 +100,11 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
   for (int i = 0; i < condition_num; i++) {
     const Condition &condition = conditions[i];
 
-    if (is_subquery(&condition.left) && is_subquery(&condition.right)) {
-      LOG_ERROR("Illegal sql: both side of where condition are subquery");
-      return RC::SQL_SYNTAX;
+    if (condition.comp == COND_IN || condition.comp == NOT_IN) {
+      if (!is_attr(&condition.left) || !is_subquery(&condition.right)) {
+        LOG_ERROR("Illegal sql: left/right side of IN must be attribute/subquery");
+        return RC::SQL_SYNTAX;
+      }
     }
 
     if (is_attr(&condition.left)) {
@@ -109,6 +132,18 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
         return rc;
       }
     }
+
+    if (is_checking_subquery()) {
+      rc = check_subquery_condition_makes_sense(condition);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+    }
+
+    rc = check_and_push_extra_in_comparator_condition(condition);
+    if (rc != RC::SUCCESS) {
+      return rc;
+    }
   }
 
   return RC::SUCCESS;
@@ -117,13 +152,13 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
 RC QueryChecker::non_nullable_relattr_match_any_table(const RelAttr &rel_attr, AttrType *attr_type) {
   const FieldMeta *field_meta;
 
-  if (rel_attr.relation_name == nullptr) {
+  if (!is_checking_subquery() && rel_attr.relation_name == nullptr) {
     LOG_ERROR("Multiple table query requires identifying table of the field");
     return RC::SCHEMA_TABLE_NAME_ILLEGAL;
   }
 
   for (auto table: global_tables_) {
-    if (strcmp(table->name(), rel_attr.relation_name) == 0
+    if (refers(rel_attr.relation_name, table)
         && (field_meta = table->table_meta().field(rel_attr.attribute_name)) != nullptr) {
       if (attr_type != nullptr) {
         *attr_type = field_meta->type();
@@ -141,7 +176,7 @@ RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType 
   const FieldMeta *field_meta;
 
   if (rel_attr.relation_name != nullptr) {
-    if (strcmp(rel_attr.relation_name, table->name()) != 0) {
+    if (!refers(rel_attr.relation_name, table)) {
       LOG_ERROR("Field identifier table name: %s conflicts with single table name: %s", rel_attr.relation_name, table->name());
       return RC::SCHEMA_TABLE_NAME_ILLEGAL;
     }
@@ -161,8 +196,104 @@ RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType 
   return RC::SUCCESS;
 }
 
+RC QueryChecker::check_and_push_extra_in_comparator_condition(const Condition &condition) {
+  if (condition.comp != COND_IN && condition.comp != NOT_IN) {
+    return RC::SUCCESS;
+  }
 
-RC QueryChecker::check_subquery(const Subquery *subquery, CompOp comp, bool left) {
+  const RelAttr &in_attr = condition.left.attr;
+  Subquery *subquery = condition.right.subquery;
+
+  if (subquery->condition_num >= MAX_NUM) {
+    LOG_ERROR("Fail to push IN condition into subquery: too much conditions");
+    return RC::GENERIC_ERROR;
+  }
+
+  Condition &subquery_in_condition = subquery->conditions[subquery->condition_num];
+
+  // set comparator
+  subquery_in_condition.comp = EQUAL_TO;
+
+  // set left side
+  subquery_in_condition.left.type = COND_FIELD;
+  subquery_in_condition.left.attr = subquery->attribute;
+  if (subquery->attribute.relation_name == nullptr) {
+    if (subquery->relation_num != 1) {
+      LOG_ERROR("Inconsistent internal state: subquery has multiple relations with no identifier");
+      return RC::GENERIC_ERROR;
+    }
+    subquery_in_condition.left.attr.relation_name = strdup(subquery->relations[0]);
+  }
+
+  // set right side
+  subquery_in_condition.right.type = COND_FIELD;
+  subquery_in_condition.right.attr = in_attr;
+  if (in_attr.relation_name == nullptr) {
+    // these two checks should never fail
+    if (local_tables_ != &global_tables_) {
+      LOG_ERROR("Inconsistent internal state: subquery condition identifier adder failed");
+      return RC::GENERIC_ERROR;
+    }
+
+    if (local_tables_->size() != 1) {
+      LOG_ERROR("Inconsistent internal state: most outer query has multiple relations with no identifier");
+      return RC::GENERIC_ERROR;
+    }
+
+    subquery_in_condition.right.attr.relation_name = strdup((*local_tables_)[0]->name());
+  }
+
+  ++subquery->condition_num;
+  return RC::SUCCESS;
+}
+
+RC QueryChecker::check_subquery_condition_makes_sense(const Condition &condition) {
+  /*
+   * Queries whose condition has at least one attribute field like:
+   *    select * from t1 where t1.id in (select t2.id from t2 where t1.id > 1);
+   *    select * from t1, t2 where t1.id in (select t3.id from t3 where t1.id > t2.id);
+   * make no sense, because conditions of subquery refer no subquery relations.
+   *
+   * However, queries like:
+   *    select * from t1 where t1.id in (select t2.id from t2 where t1.id > 1 and t2.id > t1.id);
+   *    select * from t1, t2 where t1.id in (select t3.id from t3 where t1.id > t2.id and t3.id > t1.id and t3.id > t2.id);
+   *    select * from t1, t2 where t1.id in (select t3.id from t3 where t1.id > t2.id and t3.id > t1.id);
+   * should pass, because the multiple table conditions(e.g. t2.id > t1.id in first query) implies more tables should be
+   * augmented to origin subquery relations.
+   *
+   * Note queries like:
+   *    select * from t1 where t1.id in (select t3.id from t3 where t1.id > t2.id and t3.id > t1.id and t3.id > t2.id);
+   * are also illegal, because t2 doesn't appear in outer join list.
+   *
+   * Still, queries like:
+   *    select * from t1, t2 where t1.id in (select t3.id from t3 where t2.id > 3 and t3.id > t1.id);
+   * make so sense.
+   *
+   * Subquery relation augmentation should be dealt with earlier.
+   */
+  if (is_attr(&condition.left) && is_attr(&condition.right)) {
+    for (auto table : *local_tables_) {
+      if (refers(condition.left.attr.relation_name, table)
+        || refers(condition.right.attr.relation_name, table)) {
+        return RC::SUCCESS;
+      }
+    }
+  } else if (!is_attr(&condition.left) && !is_attr(&condition.right)) {
+    return RC::SUCCESS;
+  } else {
+    const ConditionField &attr_field = is_attr(&condition.left) ? condition.left : condition.right;
+    for (auto table : *local_tables_) {
+      if (refers(attr_field.attr.relation_name, table)) {
+        return RC::SUCCESS;
+      }
+    }
+  }
+
+  LOG_ERROR("Illegal sql: subquery condition refers no subquery relations");
+  return RC::SQL_SYNTAX;
+}
+
+RC QueryChecker::check_subquery(Subquery *subquery, CompOp comp, bool left) {
   RC rc;
   printf("into check_subquery\n");
   rc = check_subquery_position(comp, left);
@@ -186,15 +317,16 @@ RC QueryChecker::check_subquery(const Subquery *subquery, CompOp comp, bool left
     return rc;
   }
 
-  printf("before check where\n");
-  rc = check_subquery_where_fields(subquery);
+  printf("before check attr\n");
+  rc = check_subquery_select_attribute(subquery);
   if (rc != RC::SUCCESS) {
     pop_local_tables();
     return rc;
   }
+  printf("after check attr\n");
 
-  printf("before check attr\n");
-  rc = check_subquery_select_attribute(subquery);
+  printf("before check where\n");
+  rc = check_subquery_where_fields(subquery);
   if (rc != RC::SUCCESS) {
     pop_local_tables();
     return rc;
@@ -221,57 +353,99 @@ RC QueryChecker::check_subquery_result_type(const Subquery *subquery, CompOp com
   return RC::SUCCESS;
 }
 
-RC QueryChecker::check_subquery_where_fields(const Subquery *subquery) {
+RC QueryChecker::check_subquery_where_fields(Subquery *subquery) {
   RC rc;
 
-  for (auto table : *local_tables_) {
-    global_tables_.push_back(table);
+  push_match_func_and_global_table();
+
+  rc = check_and_rewrite_subquery_where_fields_identifier(subquery);
+  if (rc !=  RC::SUCCESS) {
+    pop_match_func_and_global_table();
+    return rc;
   }
-  push_match_func();
+
+  rc = check_and_augment_relations_from_where_fields(subquery);
+  if (rc != RC::SUCCESS) {
+    pop_match_func_and_global_table();
+    return rc;
+  }
 
   rc = check_where_fields_helper(subquery->conditions, subquery->condition_num);
 
-  pop_match_func();
-  for (int i = 0; i < local_tables_->size(); i++) {
-    global_tables_.pop_back();
-  }
-
+  pop_match_func_and_global_table();
   return rc;
 }
 
-RC QueryChecker::subquery_condition_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type) {
-  const FieldMeta *field_meta;
-
-  if (rel_attr.relation_name == nullptr) {
-    if (local_tables_->size() > 1) {
-      LOG_ERROR("Multiple table query requires identifying table of the field");
-      return RC::SCHEMA_TABLE_NAME_ILLEGAL;
-    }
-
-    Table *table = (*local_tables_)[0];
-
-    if ((field_meta = table->table_meta().field(rel_attr.attribute_name)) == nullptr) {
-      LOG_ERROR("Table: %s doesn't have field: %s", table->name(), rel_attr.attribute_name);
-      return RC::SCHEMA_FIELD_NOT_EXIST;
-    }
-    if (attr_type != nullptr) {
-      *attr_type = field_meta->type();
-    }
-    return RC::SUCCESS;
-  }
-
-  for (auto table : global_tables_) {
-    if (strcmp(table->name(), rel_attr.relation_name) == 0
-        && (field_meta = table->table_meta().field(rel_attr.attribute_name)) != nullptr) {
-      if (attr_type != nullptr) {
-        *attr_type = field_meta->type();
+RC QueryChecker::check_and_rewrite_subquery_where_fields_identifier(Subquery *subquery) {
+  if (local_tables_->size() == 1) {
+    const char *table_name = (*local_tables_)[0]->name();
+    for (int i = 0; i < subquery->condition_num; i++) {
+      Condition &condition = subquery->conditions[i];
+      if (is_attr(&condition.left) && condition.left.attr.relation_name == nullptr) {
+        condition.left.attr.relation_name = strdup(table_name);
       }
-      return RC::SUCCESS;
+      if (is_attr(&condition.right) && condition.right.attr.relation_name == nullptr) {
+        condition.right.attr.relation_name = strdup(table_name);
+      }
+    }
+  } else {
+    for (int i = 0; i < subquery->condition_num; i++) {
+      Condition &condition = subquery->conditions[i];
+      if ((is_attr(&condition.left) && condition.left.attr.relation_name == nullptr)
+        || (is_attr(&condition.right) && condition.right.attr.relation_name == nullptr)) {
+        LOG_ERROR("Multiple table query requires identifying table of the field");
+        return RC::SCHEMA_TABLE_NAME_ILLEGAL;
+      }
     }
   }
+  return RC::SUCCESS;
+}
 
-  LOG_ERROR("No table matches table: %s field: %s", rel_attr.relation_name, rel_attr.attribute_name);
-  return RC::SCHEMA_FIELD_NOT_EXIST;
+RC QueryChecker::check_and_augment_relations_from_where_fields(Subquery *subquery) {
+  int size_save;
+
+  // add while loop
+  do {
+    size_save = local_tables_->size();
+    for (int i = 0; i < subquery->condition_num; i++) {
+      const Condition &condition = subquery->conditions[i];
+      if (is_attr(&condition.left) && is_attr(&condition.right)) {
+        bool left_in_local = relation_in(condition.left.attr.relation_name, *local_tables_, nullptr);
+        bool right_in_local = relation_in(condition.right.attr.relation_name, *local_tables_, nullptr);
+        if (left_in_local != right_in_local) {
+          const ConditionField &field_not_in_local = left_in_local ? condition.right : condition.left;
+          Table *table;
+          if (relation_in(field_not_in_local.attr.relation_name, global_tables_, &table)) {
+            if (subquery->relation_num >= MAX_NUM) {
+              LOG_ERROR("Fail to augment subquery relations: too much relations in subquery");
+              return GENERIC_ERROR;
+            }
+            subquery->relations[subquery->relation_num] = strdup(table->name());
+            local_tables_->push_back(table);
+            ++subquery->relation_num;
+          } else {
+            LOG_ERROR("Illegal sql: %s is in neither local tables nor global tables",
+                      field_not_in_local.attr.relation_name);
+            return RC::SQL_SYNTAX;
+          }
+        }
+      }
+    }
+  } while (size_save != local_tables_->size());
+
+  return RC::SUCCESS;
+}
+
+bool QueryChecker::relation_in(const char *relation_name, const vector<Table *> &tables, Table **found_table) {
+  for (auto table : tables) {
+    if (refers(relation_name, table)) {
+      if (found_table != nullptr) {
+        *found_table = table;
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 RC QueryChecker::check_subquery_select_attribute(const Subquery *subquery) {
@@ -317,6 +491,7 @@ RC QueryChecker::subquery_select_attr_nullable_relattr_match_table(const RelAttr
     }
 
     Table *table = (*local_tables_)[0];
+    const_cast<RelAttr &>(rel_attr).relation_name = strdup(table->name());
 
     if ((field_meta = table->table_meta().field(rel_attr.attribute_name)) == nullptr) {
       LOG_ERROR("Table: %s doesn't have field: %s", table->name(), rel_attr.attribute_name);
@@ -329,7 +504,7 @@ RC QueryChecker::subquery_select_attr_nullable_relattr_match_table(const RelAttr
   }
 
   for (auto table : *local_tables_) {
-    if (strcmp(table->name(), rel_attr.relation_name) == 0
+    if (refers(rel_attr.relation_name, table)
         && (field_meta = table->table_meta().field(rel_attr.attribute_name)) != nullptr) {
       if (attr_type != nullptr) {
         *attr_type = field_meta->type();
@@ -383,7 +558,7 @@ bool QueryChecker::find_group_by_field_in_attribute_list(const RelAttr &group_by
     field_found = strcmp(group_by_field.attribute_name, attr_field.attribute_name) == 0;
     table_found = group_by_field.relation_name == nullptr
       || attr_field.relation_name == nullptr
-      || strcmp(group_by_field.relation_name, attr_field.relation_name) == 0;
+      || refers(group_by_field.relation_name, attr_field.relation_name);
     if (field_found && table_found) {
       return true;
     }

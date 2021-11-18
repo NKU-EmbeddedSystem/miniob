@@ -218,6 +218,23 @@ public:
     tuples_.emplace_back(std::move(tuple));
   }
   void print(std::ostream &os) const;
+  const std::vector<Tuple> &tuples() const { return tuples_; }
+  void prune_null() {
+    if (tuples_.empty()) {
+      return;
+    }
+    Tuple &tuple = tuples_[0];
+    bool clean = false;
+    for (const auto& value : tuple.raw_values()) {
+      if (value->is_null()) {
+        clean = true;
+        break;
+      }
+    }
+    if (clean) {
+      tuples_.pop_back();
+    }
+  }
 
 private:
   AggSchema schema_;

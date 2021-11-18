@@ -36,11 +36,16 @@ private:
   RC check_from_relations_and_init_tables_helper(const char * const relations[], int relation_num);
   RC check_where_fields() { return check_where_fields_helper(selects_.conditions, selects_.condition_num); }
   RC check_where_fields_helper(const Condition conditions[], int condition_num);
-  RC check_subquery(const Subquery *subquery, CompOp comp, bool left);
+  RC check_and_push_extra_in_comparator_condition(const Condition &condition);
+  bool is_checking_subquery() { return local_tables_ != &global_tables_; }
+  RC check_subquery_condition_makes_sense(const Condition &condition);
+  RC check_subquery(Subquery *subquery, CompOp comp, bool left);
   RC check_subquery_position(CompOp comp, bool left);
   RC check_subquery_result_type(const Subquery *subquery, CompOp comp);
-  RC check_subquery_where_fields(const Subquery *subquery);
-  RC subquery_condition_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
+  RC check_subquery_where_fields(Subquery *subquery);
+  RC check_and_rewrite_subquery_where_fields_identifier(Subquery *subquery);
+  RC check_and_augment_relations_from_where_fields(Subquery *subquery);
+  bool relation_in(const char *relation_name, const vector<Table *> &tables, Table **);
   RC check_subquery_select_attribute(const Subquery *subquery);
   RC subquery_select_attr_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
   RC check_group_by_fields();

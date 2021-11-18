@@ -21,7 +21,7 @@ RC SingleRelationSelectExeNodeCreator::create(vector<SelectExeNode *> &select_no
     int extra_count = 0;
     const char *table_name = selects_.relations[i];
     SelectExeNode *select_node = new SelectExeNode;
-
+    printf("\tcreate select node for table[%d]: %s\n", i, table_name);
     rc = create_selection_executor(table_name, select_node, extra_count);
     if (rc != RC::SUCCESS) {
       delete select_node;
@@ -43,6 +43,7 @@ RC SingleRelationSelectExeNodeCreator::create_selection_executor(const char *tab
   // 列出跟这张表关联的Attr
   Table * table = DefaultHandler::get_default().find_table(db_, table_name);
 
+  printf("before create schema\n");
   // 设置结果集的列名
   TupleSchema schema;
   RC rc = (this->*create_tuple_schema_)(table, schema);
@@ -50,6 +51,7 @@ RC SingleRelationSelectExeNodeCreator::create_selection_executor(const char *tab
     return rc;
   }
 
+  printf("before create filters\n");
   // 找出仅与此表相关的过滤条件, 或者都是值的过滤条件
   std::vector<DefaultConditionFilter *> condition_filters;
   rc = create_condition_filters(table, schema, condition_filters, extra_count);
@@ -57,6 +59,7 @@ RC SingleRelationSelectExeNodeCreator::create_selection_executor(const char *tab
     return rc;
   }
 
+  printf("before node init\n");
   return select_node->init(trx_, table, std::move(schema), std::move(condition_filters));
 }
 
@@ -69,8 +72,13 @@ RC SingleRelationSelectExeNodeCreator::create_condition_filters(
   RC rc;
 
   for (int i = 0; i < selects_.condition_num; i++) {
-    const auto &condition = selects_.conditions[i];
-    if (condition_refers_single_table(condition, table_name)) {
+    auto &condition = const_cast<Condition &>(selects_.conditions[i]);
+    printf("before refers single\n");
+    bool single = condition_refers_single_table(condition, table_name);
+    printf("after refers single: %d\n", single);
+
+    if (single) {
+      printf("before push single\n");
       rc = push_single_table_filter(condition, table, condition_filters);
       if (rc != RC::SUCCESS) {
         return rc;
@@ -89,14 +97,14 @@ RC SingleRelationSelectExeNodeCreator::create_condition_filters(
 bool SingleRelationSelectExeNodeCreator::condition_refers_single_table(
         const Condition &condition,
         const char *table_name) {
-  return (is_value(&condition.left) && is_value(&condition.right)) // 两边都是值
-         || (is_attr(&condition.left) && is_value(&condition.right)
-             && match_table(condition.left.attr.relation_name, table_name)) // 左边是属性右边是值
-         || (is_value(&condition.left) && is_attr(&condition.right)
-             && match_table(condition.right.attr.relation_name, table_name)) // 左边是值，右边是属性名
+  return (!is_attr(&condition.left) && !is_attr(&condition.right)) // 两边都是不是属性
+         || (is_attr(&condition.left) && !is_attr(&condition.right)
+             && match_table(condition.left.attr.relation_name, table_name)) // 左边是属性右边不是
+         || (!is_attr(&condition.left) && is_attr(&condition.right)
+             && match_table(condition.right.attr.relation_name, table_name)) // 左边不是属性，右边是属性
          || (is_attr(&condition.left) && is_attr(&condition.right)
              && match_table(condition.left.attr.relation_name, table_name)
-             && match_table(condition.right.attr.relation_name, table_name)); // 左右都是属性名，并且表名都符合
+             && match_table(condition.right.attr.relation_name, table_name)); // 左右都是属性，并且表名都符合
 }
 
 bool SingleRelationSelectExeNodeCreator::match_table(

@@ -145,7 +145,7 @@ public:
   }
 
   TupleValue *result() const override {
-    if (is_null)
+    if (is_null || cnt_ == 0)
       return new NullValue();
 
     if (attr_type_ == INTS) {
