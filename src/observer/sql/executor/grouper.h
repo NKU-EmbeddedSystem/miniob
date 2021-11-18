@@ -13,24 +13,10 @@
 #include "storage/common/table.h"
 #include "rc.h"
 
-template<>
-struct std::hash<TupleValue *> {
-  std::size_t operator()(const TupleValue *tuple) const noexcept {
-    return tuple->hash();
-  }
-};
-
-struct GroupByKeyEqualTo {
-  bool operator()(const TupleValue *lhs, const TupleValue *rhs) const
-  {
-    return lhs->hash() == rhs->hash();
-  }
-};
-
 class Grouper {
   using Key = TupleValue *;
   using Value = std::shared_ptr<void>;
-  using Map = std::unordered_map<Key, Value, std::hash<TupleValue *>, GroupByKeyEqualTo>;
+  using Map = std::unordered_map<Key, Value, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
   using Group = std::vector<const Tuple *>;
 
 public:

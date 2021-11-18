@@ -13,6 +13,8 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <stddef.h>
+#include <unordered_set>
+
 #include "condition_filter.h"
 #include "record_manager.h"
 #include "common/log/log.h"
@@ -20,18 +22,19 @@ See the Mulan PSL v2 for more details. */
 #include "sql/executor/value.h"
 
 using namespace common;
+using std::unordered_set;
 
 ConditionFilter::~ConditionFilter()
 {}
 
 DefaultConditionFilter::DefaultConditionFilter()
 {
-  left_.is_attr = false;
+//  left_.is_attr = false;
   left_.attr_length = 0;
   left_.attr_offset = 0;
   left_.value = nullptr;
 
-  right_.is_attr = false;
+//  right_.is_attr = false;
   right_.attr_length = 0;
   right_.attr_offset = 0;
   right_.value = nullptr;
@@ -53,6 +56,7 @@ RC DefaultConditionFilter::init(const ConDesc &left, const ConDesc &right, AttrT
 
   left_ = left;
   right_ = right;
+  printf("condition filter evaluated to AttrType: %d\n", attr_type);
   attr_type_ = attr_type;
   comp_op_ = comp_op;
   return RC::SUCCESS;
@@ -67,8 +71,8 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
   AttrType type_left = UNDEFINED;
   AttrType type_right = UNDEFINED;
 
+  left.type = condition.left.type;
   if (is_attr(&condition.left)) {
-    left.is_attr = true;
     const FieldMeta *field_left = table_meta.field(condition.left.attr.attribute_name);
     if (nullptr == field_left) {
       LOG_WARN("No such field in condition. %s.%s", table.name(), condition.left.attr.attribute_name);
@@ -79,18 +83,20 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
     left.attr_offset = field_left->offset();
     left.value = nullptr;
     type_left = field_left->type();
-  } else {
-    left.is_attr = false;
+  } else if (is_value(&condition.left)){
     left.value = condition.left.value.data;  // 校验type 或者转换类型
     type_left = condition.left.value.type;
 
     left.nullable_ = false;
     left.attr_length = 0;
     left.attr_offset = 0;
+  } else {
+    left.subquery = condition.left.subquery;
+    type_left = condition.left.subquery->result_type;
   }
 
+  right.type = condition.right.type;
   if (is_attr(&condition.right)) {
-    right.is_attr = true;
     const FieldMeta *field_right = table_meta.field(condition.right.attr.attribute_name);
     if (nullptr == field_right) {
       LOG_WARN("No such field in condition. %s.%s", table.name(), condition.right.attr.attribute_name);
@@ -102,26 +108,20 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
     type_right = field_right->type();
 
     right.value = nullptr;
-  } else {
-    right.is_attr = false;
+  } else if (is_value(&condition.right)){
     right.value = condition.right.value.data;
     type_right = condition.right.value.type;
 
     right.nullable_ = false;
     right.attr_length = 0;
     right.attr_offset = 0;
+  } else {
+    right.subquery = condition.right.subquery;
+    type_right = condition.right.subquery->result_type;
   }
 
-  if (type_left == NULLS) {
-    left.isnull_ = true;
-  } else {
-    left.isnull_ = false;
-  }
-  if (type_right == NULLS) {
-    right.isnull_ = true;
-  } else {
-    right.isnull_ = false;
-  }
+  left.isnull_ = (type_left == NULLS);
+  right.isnull_ = (type_right == NULLS);
 
   // 校验和转换
   //  if (!field_type_compare_compatible_table[type_left][type_right]) {
@@ -134,20 +134,28 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
     if (type_left == NULLS || type_right == NULLS) {
       goto match;
     }
-    if (left.is_attr != right.is_attr) {
-      ConDesc &attr_cond = left.is_attr ? left : right;
-      ConDesc &scalar_cond = left.is_attr ? right : left;
-      AttrType attr_type = left.is_attr ? type_left : type_right;
-      AttrType scalar_type = left.is_attr ? type_right : type_left;
+
+    if (((type_left == INTS && type_right == FLOATS) || (type_left == FLOATS && type_right == INTS))
+      && !((is_attr(left) && is_attr(right)))) {
+      float_int_ = true;
+      int_left_ = (type_left == INTS);
+      goto match;
+    }
+    // subquery type can be viewed the same as attribute
+    if ((is_value(left) && !is_value(right)) || (!is_value(left) && is_value(right))) {
+      ConDesc &attr_cond = is_value(left) ? right : left;
+      ConDesc &value_cond = is_value(left) ? left : right;
+      AttrType attr_type = is_value(left) ? type_right : type_left;
+      AttrType value_type = is_value(left) ? type_left : type_right;
 
       // rewrite date value
-      if (attr_type == DATE && scalar_type == CHARS) {
+      if (attr_type == DATE && value_type == CHARS) {
         tm t;
 
         // validate and rewrite scalar value
         if (DateValue::validate_data_format(
-                static_cast<const char *>(scalar_cond.value), &t)) {
-          *reinterpret_cast<date_t *>(scalar_cond.value) = DateValue::to_raw_data(&t);
+                static_cast<const char *>(value_cond.value), &t)) {
+          *reinterpret_cast<date_t *>(value_cond.value) = DateValue::to_raw_data(&t);
 
           // for later init() parameter
           type_left = DATE;
@@ -158,11 +166,57 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
         }
       }
     }
+
+    if ((is_attr(left) && !is_attr(right))|| (is_attr(right) && !is_attr(left))) {
+
+    }
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
 match:
   return init(left, right, type_left, condition.comp);
+}
+
+int DefaultConditionFilter::subquery_filter(const Record &rec, bool *has_null) const {
+  TupleValue *left_value = nullptr;
+  TupleValue *right_value = nullptr;
+  char *value;
+  int result;
+
+  if (is_attr(left_)) {
+    value = (char *)(rec.data + left_.attr_offset);
+    left_value = TupleValue::from(attr_type_, value);
+  } else if (is_value(left_)) {
+    value = (char *)left_.value;
+    left_value = TupleValue::from(attr_type_, value);
+  } else {
+    left_value = static_cast<TupleValue *>(left_.subquery->result)->clone();
+  }
+
+  if (is_attr(right_)) {
+    value = (char *)(rec.data + right_.attr_offset);
+    right_value = TupleValue::from(attr_type_, value);
+  } else if (is_value(right_)) {
+    value = (char *)right_.value;
+    right_value = TupleValue::from(attr_type_, value);
+  } else {
+    right_value = static_cast<TupleValue *>(right_.subquery->result)->clone();
+  }
+
+  *has_null = (left_value->is_null() || right_value->is_null());
+
+  if (!(*has_null) && float_int_) {
+    if (int_left_) {
+      left_value = FloatValue::move_from(static_cast<IntValue *>(left_value));
+    } else {
+      right_value = FloatValue::move_from(static_cast<IntValue *>(right_value));
+    }
+  }
+
+  result = left_value->compare(*right_value);
+  delete left_value;
+  delete right_value;
+  return result;
 }
 
 bool DefaultConditionFilter::filter(const Record &rec) const
@@ -171,8 +225,19 @@ bool DefaultConditionFilter::filter(const Record &rec) const
   int right_isnull = 0;
   char *left_value = nullptr;
   char *right_value = nullptr;
+  int cmp_result = 0;
 
-  if (left_.is_attr) {  // value
+  if (comp_op_ != COND_IN && comp_op_ != NOT_IN && (float_int_ || is_subquery(left_) || is_subquery(right_))) {
+    bool has_null;
+    cmp_result = subquery_filter(rec, &has_null);
+    if (has_null) {
+      return false;
+    } else {
+      goto op_switch;
+    }
+  }
+
+  if (is_attr(left_)) {  // value
     if (left_.nullable_) {
       // nullable占4位
       left_isnull = *(int *)(rec.data + left_.attr_offset);
@@ -180,13 +245,15 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     }else {
       left_value = (char *)(rec.data + left_.attr_offset);
     }
-  } else {
+  } else if (is_value(left_)) {
     left_isnull = left_.isnull_;
     if (!left_isnull)
       left_value = (char *)left_.value;
+  } else {
+    LOG_ERROR("DefaultConditionFilter::filter: left is subquery");
   }
 
-  if (right_.is_attr) {
+  if (is_attr(right_)) {
     if (right_.nullable_) {
       // nullable需要多读4位判断是否为空
       right_isnull = *(int *)(rec.data + right_.attr_offset);
@@ -194,10 +261,12 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     } else {
         right_value = (char *)(rec.data + right_.attr_offset);
     }
-  } else {
+  } else if (is_value(right_)){
     right_isnull = right_.isnull_;
     if (!right_isnull)
       right_value = (char *)right_.value;
+  } else {
+    LOG_ERROR("DefaultConditionFilter::filter: right is subquery");
   }
 
   if (comp_op_ != IS_OP && comp_op_ != IS_NOT_OP) {
@@ -206,18 +275,31 @@ bool DefaultConditionFilter::filter(const Record &rec) const
   }
 
   if (comp_op_ == IS_NOT_OP) {
-    if (!left_isnull)
-      return true;
-    return false;
+    return !left_isnull;
   }
 
   if (comp_op_ == IS_OP) {
-    if (left_isnull)
-      return true;
-    return false;
+    return left_isnull;
   }
 
-  int cmp_result = 0;
+  using Set = std::unordered_set<TupleValue *, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
+  if (comp_op_ == COND_IN || comp_op_ == NOT_IN) {
+    printf("DefaultConditionFilter::filter: deal with in operator\n");
+    Subquery *subquery = right_.subquery;
+    AttrType set_type = subquery->result_type;
+    if (attr_type_ != set_type) {
+      LOG_ERROR("Where IN operator type mismatch: left = %d, right = %d", attr_type_, set_type);
+      return false;
+    }
+
+    bool found;
+    TupleValue *temp_tuple_value_from_record = TupleValue::from(attr_type_, left_value);
+    auto set = static_cast<Set *>(subquery->result);
+    found = (set->find(temp_tuple_value_from_record) != set->end());
+    delete temp_tuple_value_from_record;
+    return (comp_op_ == COND_IN) == found;
+  }
+
   switch (attr_type_) {
     case CHARS: {  // 字符串都是定长的，直接比较
       // 按照C字符串风格来定
@@ -251,6 +333,7 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     break;
   }
 
+op_switch:
   switch (comp_op_) {
     case EQUAL_TO:
       return 0 == cmp_result;

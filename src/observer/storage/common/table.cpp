@@ -1130,10 +1130,10 @@ Index *Table::find_index(const char *index_name) const {
 IndexScanner *Table::find_index_for_scan(const DefaultConditionFilter &filter) {
   const ConDesc *field_cond_desc = nullptr;
   const ConDesc *value_cond_desc = nullptr;
-  if (filter.left().is_attr && !filter.right().is_attr) {
+  if (is_attr(filter.left()) && !is_attr(filter.right())) {
     field_cond_desc = &filter.left();
     value_cond_desc = &filter.right();
-  } else if (filter.right().is_attr && !filter.left().is_attr) {
+  } else if (is_attr(filter.right()) && !is_attr(filter.left())) {
     field_cond_desc = &filter.right();
     value_cond_desc = &filter.left();
   }

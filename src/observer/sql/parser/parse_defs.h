@@ -125,6 +125,7 @@ struct Subquery {
     RelAttr   attribute;    // attrs in Select clause
     AggDesc   agg;          // descriptor for each aggregation operation
   };
+  AttrType result_type;
   void *result;
   size_t    relation_num;           // Length of relations in Fro clause
   char *    relations[MAX_NUM];     // relations in From clause
@@ -278,6 +279,7 @@ void attr_info_destroy(AttrInfo *attr_info);
 void agg_desc_init_string(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, char *relation_name, char *attribute_name);
 void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, int number);
 
+const char *comp_op_name(CompOp comp);
 const char *agg_type_name(AggType agg_type);
 const char *agg_operand_name(AggOperandType operand_type);
 

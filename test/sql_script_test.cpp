@@ -62,18 +62,11 @@ void test_script(const vector<string> &sql_script_names)
     string base_dir = "../../test/";
     string out_base_dir = "../../build/";
     string sql_script_path = base_dir + sql_script_name;
-    string result_path = out_base_dir + sql_script_name + ".result";
-    string both_sql_and_result_path = out_base_dir + sql_script_name + ".both";
+    string both_sql_and_result_path = out_base_dir + sql_script_name + ".result";
 
     ifstream fin(sql_script_path);
     if (!fin.is_open()) {
       printf("Fail to open script: %s\n", sql_script_path.c_str());
-      exit(-1);
-    }
-
-    ofstream fout(result_path);
-    if (!fout.is_open()) {
-      printf("Fail to create file: %s\n", result_path.c_str());
       exit(-1);
     }
 
@@ -105,7 +98,7 @@ void test_script(const vector<string> &sql_script_names)
         exit(1);
       }
       cout << "  [SQL] " << send_buf << endl;
-      usleep(200000);
+      usleep(500000);
       memset(recv_buf, 0, sizeof(recv_buf));
       int len = recv(sockfd, recv_buf, sizeof(recv_buf), 0);
       if (len < 0) {
@@ -116,7 +109,6 @@ void test_script(const vector<string> &sql_script_names)
         printf("Connection has been closed\n");
         break;
       }
-      fout << recv_buf << endl;
       bout << send_buf << endl
            << recv_buf << endl;
     }
@@ -147,7 +139,8 @@ int main() {
 //    "order.sql",
 //    "outer_join_empty_test.sql",
 //    "outer_join_test.sql",
-    "subquery_test.sql",
+    "subquery_syntax_test.sql",
+//    "subquery_test.sql",
 //    "unique.sql",
 //    "where_test.sql",
   });
