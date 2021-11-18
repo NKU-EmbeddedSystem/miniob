@@ -8,8 +8,12 @@
 #include "single_relation_select_execution_node_creator.h"
 #include "aggregation_executor.h"
 
+using std::vector;
+using std::pair;
+
+vector<pair<RelAttr, TupleValue *>> subquery_context;
+
 static RC evaluate_condition(Condition &condition, const char *db, Trx *trx);
-static RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx);
 static Selects subquery2selects(const Subquery *subquery);
 
 RC evaluate_conditions(Condition conditions[], int condition_num, const char *db, Trx *trx) {
@@ -30,7 +34,7 @@ RC evaluate_conditions(Condition conditions[], int condition_num, const char *db
 static RC evaluate_condition(Condition &condition, const char *db, Trx *trx) {
   RC rc;
 
-  if (is_subquery(&condition.left)) {
+  if (is_subquery(&condition.left) && !condition.left.subquery->lazy) {
     printf("before evaluate left subquery\n");
     rc = evaluate_subquery(condition.left.subquery, db, trx);
     if (rc != RC::SUCCESS) {
@@ -39,7 +43,7 @@ static RC evaluate_condition(Condition &condition, const char *db, Trx *trx) {
     printf("end evaluate left subquery\n");
   }
 
-  if (is_subquery(&condition.right)) {
+  if (is_subquery(&condition.right) && !condition.right.subquery->lazy) {
     printf("before evaluate right subquery\n");
     rc = evaluate_subquery(condition.right.subquery, db, trx);
     if (rc != RC::SUCCESS) {
@@ -51,15 +55,55 @@ static RC evaluate_condition(Condition &condition, const char *db, Trx *trx) {
   return RC::SUCCESS;
 }
 
+static void free_subquery_result(Subquery *subquery) {
+  if (subquery->result == nullptr) {
+    LOG_ERROR("Inconsistent state: want to free subquery result but find nullptr");
+    return;
+  }
+
+  if (subquery->is_agg) {
+    TupleValue *value = static_cast<TupleValue *>(subquery->result);
+    delete value;
+  } else {
+    using Set = std::unordered_set<TupleValue *, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
+    Set *set = static_cast<Set *>(subquery->result);
+    for (auto ptr : *set) {
+      delete ptr;
+    }
+    delete set;
+  }
+
+  subquery->result = nullptr;
+}
+
+void free_condition_results(Condition conditions[], int condition_num) {
+  for (int i = 0; i < condition_num; i++) {
+    Condition &condition = conditions[i];
+
+    if (is_subquery(&condition.left)) {
+      free_subquery_result(condition.left.subquery);
+    }
+    if (is_subquery(&condition.right)) {
+      free_subquery_result(condition.right.subquery);
+    }
+  }
+}
+
+#define ROLL_BACK_CONDITION_RESULTS \
+do { \
+  free_condition_results(subquery->conditions, subquery->condition_num); \
+} while(0)
+
 #define ROLL_BACK_SELECT_EXE_NODES \
 do {                               \
+  ROLL_BACK_CONDITION_RESULTS; \
   for (SelectExeNode *& tmp_node: select_nodes) { \
     delete tmp_node; \
   }                                \
   return rc;                                 \
 } while(0)
 
-static RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
+RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
   RC rc;
 
   printf("before evaluate subquery conditions\n");
@@ -77,6 +121,7 @@ static RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
   SingleRelationSelectExeNodeCreator node_creator(db, selects, trx);
   rc = node_creator.create(select_nodes, extra_counts);
   if (rc != RC::SUCCESS) {
+    ROLL_BACK_CONDITION_RESULTS;
     return rc;
   }
   printf("after subquery node create\n");
@@ -187,6 +232,7 @@ static RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
     subquery->result_type = result_tuple_set->schema().field(0).type();
   }
 
+  free_condition_results(subquery->conditions, subquery->condition_num);
   for (SelectExeNode *& tmp_node: select_nodes) {
     delete tmp_node;
   }

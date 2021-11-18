@@ -64,7 +64,10 @@ typedef struct _ConditionField {
   ConditionFieldType type;
   union {
     Value value;
-    RelAttr attr;
+    struct {
+      RelAttr attr;
+      int refers_outer;
+    };
     struct Subquery * subquery;
   };
 } ConditionField;
@@ -125,6 +128,7 @@ struct Subquery {
     RelAttr   attribute;    // attrs in Select clause
     AggDesc   agg;          // descriptor for each aggregation operation
   };
+  int lazy;
   AttrType result_type;
   void *result;
   size_t    relation_num;           // Length of relations in Fro clause

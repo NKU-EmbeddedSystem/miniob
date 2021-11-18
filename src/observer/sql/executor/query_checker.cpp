@@ -93,7 +93,7 @@ RC QueryChecker::check_from_relations_and_init_tables_helper(const char *const r
   return RC::SUCCESS;
 }
 
-RC QueryChecker::check_where_fields_helper(const Condition conditions[], int condition_num) {
+RC QueryChecker::check_where_fields_helper(const Condition conditions[], int condition_num, bool subquery_is_agg) {
   RC rc;
 
   // check WHERE relation.attribute existence
@@ -133,7 +133,7 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
       }
     }
 
-    if (is_checking_subquery()) {
+    if (is_checking_subquery() && !subquery_is_agg) {
       rc = check_subquery_condition_makes_sense(condition);
       if (rc != RC::SUCCESS) {
         return rc;
@@ -346,10 +346,18 @@ RC QueryChecker::check_subquery_position(CompOp comp, bool left) {
 
 RC QueryChecker::check_subquery_result_type(const Subquery *subquery, CompOp comp) {
   printf("\tcomp: %d is_agg: %d\n", comp, subquery->is_agg);
-  if (comp != COND_IN && comp != NOT_IN && !subquery->is_agg) {
-    LOG_ERROR("Illegal sql: subquery should be evaluated to single value");
-    return RC::SQL_SYNTAX;
+  if (subquery->is_agg) {
+    if (comp == COND_IN || comp == NOT_IN) {
+      LOG_ERROR("Illegal sql: subquery should not be evaluated to single value");
+      return RC::SQL_SYNTAX;
+    }
+  } else {
+    if (comp != COND_IN && comp != NOT_IN) {
+      LOG_ERROR("Illegal sql: subquery should be evaluated to single value");
+      return RC::SQL_SYNTAX;
+    }
   }
+
   return RC::SUCCESS;
 }
 
@@ -370,7 +378,7 @@ RC QueryChecker::check_subquery_where_fields(Subquery *subquery) {
     return rc;
   }
 
-  rc = check_where_fields_helper(subquery->conditions, subquery->condition_num);
+  rc = check_where_fields_helper(subquery->conditions, subquery->condition_num, subquery->is_agg);
 
   pop_match_func_and_global_table();
   return rc;
@@ -408,21 +416,27 @@ RC QueryChecker::check_and_augment_relations_from_where_fields(Subquery *subquer
   do {
     size_save = local_tables_->size();
     for (int i = 0; i < subquery->condition_num; i++) {
-      const Condition &condition = subquery->conditions[i];
+      Condition &condition = subquery->conditions[i];
       if (is_attr(&condition.left) && is_attr(&condition.right)) {
         bool left_in_local = relation_in(condition.left.attr.relation_name, *local_tables_, nullptr);
         bool right_in_local = relation_in(condition.right.attr.relation_name, *local_tables_, nullptr);
         if (left_in_local != right_in_local) {
-          const ConditionField &field_not_in_local = left_in_local ? condition.right : condition.left;
+          ConditionField &field_not_in_local = left_in_local ? condition.right : condition.left;
           Table *table;
           if (relation_in(field_not_in_local.attr.relation_name, global_tables_, &table)) {
-            if (subquery->relation_num >= MAX_NUM) {
-              LOG_ERROR("Fail to augment subquery relations: too much relations in subquery");
-              return GENERIC_ERROR;
+            if (subquery->is_agg) {
+              printf("found refers outer right = %d %s.%s", left_in_local, field_not_in_local.attr.relation_name, field_not_in_local.attr.attribute_name);
+              field_not_in_local.refers_outer = true;
+              subquery->lazy = 1;
+            } else {
+              if (subquery->relation_num >= MAX_NUM) {
+                LOG_ERROR("Fail to augment subquery relations: too much relations in subquery");
+                return GENERIC_ERROR;
+              }
+              subquery->relations[subquery->relation_num] = strdup(table->name());
+              local_tables_->push_back(table);
+              ++subquery->relation_num;
             }
-            subquery->relations[subquery->relation_num] = strdup(table->name());
-            local_tables_->push_back(table);
-            ++subquery->relation_num;
           } else {
             LOG_ERROR("Illegal sql: %s is in neither local tables nor global tables",
                       field_not_in_local.attr.relation_name);

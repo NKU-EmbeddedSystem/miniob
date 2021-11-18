@@ -119,4 +119,7 @@ private:
   std::unordered_map<Table *, OperationSet> operations_;
 };
 
+extern const char *global_db;
+extern Trx *global_trx;
+
 #endif // __OBSERVER_STORAGE_TRX_TRX_H_

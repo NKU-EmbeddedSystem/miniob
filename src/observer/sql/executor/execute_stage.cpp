@@ -445,23 +445,12 @@ void free_subquery_helper(Subquery *subquery) {
     }
   }
 
-  if (subquery->result != nullptr) {
-    if (subquery->is_agg) {
-      TupleValue *value = static_cast<TupleValue *>(subquery->result);
-      delete value;
-    } else {
-      using Set = std::unordered_set<TupleValue *, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
-      Set *set = static_cast<Set *>(subquery->result);
-      for (auto ptr : *set) {
-        delete ptr;
-      }
-      delete set;
-    }
-  }
   free(subquery);
 }
 
 void free_subquery(Selects &selects) {
+  free_condition_results(selects.conditions, selects.condition_num);
+
   for (int i = 0; i < selects.condition_num; i++) {
     Condition &condition = selects.conditions[i];
     if (is_subquery(&condition.left)) {
@@ -556,6 +545,9 @@ void print_subquery(const std::string &prefix, const Condition conditions[], int
   }
 }
 
+const char *global_db;
+Trx *global_trx;
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
@@ -564,6 +556,9 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   RC rc = RC::SUCCESS;
   Session *session = session_event->get_client()->session;
   Trx *trx = session->current_trx();
+
+  global_db = db;
+  global_trx = trx;
 
   const Selects &selects = sql->sstr.selection;
   print_subquery("", selects.conditions, selects.condition_num);
@@ -590,8 +585,10 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   SingleRelationSelectExeNodeCreator node_creator(db, selects, trx);
   rc = node_creator.create(select_nodes, extra_counts);
   if (rc != RC::SUCCESS) {
+    LOG_ERROR("node creates fail");
     ROLL_BACK_TRX;
   }
+  LOG_ERROR("node creates successfully");
 
   if (select_nodes.empty()) {
     LOG_ERROR("No table given");

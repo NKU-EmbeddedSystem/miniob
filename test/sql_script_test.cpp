@@ -139,8 +139,8 @@ int main() {
 //    "order.sql",
 //    "outer_join_empty_test.sql",
 //    "outer_join_test.sql",
-    "subquery_syntax_test.sql",
-//    "subquery_test.sql",
+//    "subquery_syntax_test.sql",
+    "subquery_test.sql",
 //    "unique.sql",
 //    "where_test.sql",
   });
