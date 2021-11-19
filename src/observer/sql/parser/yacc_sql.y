@@ -238,22 +238,24 @@ create_index:		/*create index 语句的语法解析树*/
     CREATE INDEX ID ON ID LBRACE ID_list RBRACE SEMICOLON
 		{
 			CONTEXT->ssql->flag = SCF_CREATE_INDEX;//"create_index";
-			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5, $7);
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $3, $5);
 		}
     | CREATE UNIQUE INDEX ID ON ID_list LBRACE ID RBRACE SEMICOLON
     		{
 			CONTEXT->ssql->flag = SCF_CREATE_UNIQUE_INDEX;// "create_unique_index";
-			create_index_init(&CONTEXT->ssql->sstr.create_index, $4, $6, $8);
+			create_index_init(&CONTEXT->ssql->sstr.create_index, $4, $6);
     		}
     ;
 
 ID_list:
     ID 		{
-    			$$ = $1;
+			create_index_append_attribution(&CONTEXT->ssql->sstr.create_index, $1);
+//    			$$ = $1;
     		}
     | ID COMMA ID_list
     		{
-			$$ = $1;
+    			create_index_append_attribution(&CONTEXT->ssql->sstr.create_index, $1);
+//			$$ = $1;
     		}
     ;
 
