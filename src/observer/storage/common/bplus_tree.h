@@ -19,9 +19,11 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse_defs.h"
 
 struct IndexFileHeader {
-  int attr_length;
+  int attr_num;
+  int attr_lengths[MAX_NUM];
   int key_length;
-  AttrType attr_type;
+  int attr_whole_length;
+  AttrType attr_types[MAX_NUM];
   PageNum root_page; // 初始时，root_page一定是1
   int node_num;
   int order;
@@ -56,7 +58,8 @@ public:
    * 此函数创建一个名为fileName的索引。
    * attrType描述被索引属性的类型，attrLength描述被索引属性的长度
    */
-  RC create(const char *file_name, AttrType attr_type, int attr_length);
+//  RC create(const char *file_name, AttrType attr_type, int attr_length);
+  RC create(const char *file_name, AttrType attr_types[], int attr_lengths[], int attr_num);
 
   /**
    * 打开名为fileName的索引文件。
