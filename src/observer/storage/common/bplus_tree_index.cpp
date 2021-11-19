@@ -77,6 +77,7 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid) {
   int offset = 0;
   for (int i = 0; i < field_metas_.size(); ++i) {
     memcpy(key + offset, record + field_metas_[i].offset(), field_metas_[i].len());
+    offset += field_metas_[i].len();
   }
 
   RC rc = index_handler_.insert_entry(key, rid);
@@ -94,6 +95,7 @@ RC BplusTreeIndex::delete_entry(const char *record, const RID *rid) {
   int offset = 0;
   for (int i = 0; i < field_metas_.size(); ++i) {
     memcpy(key + offset, record + field_metas_[i].offset(), field_metas_[i].len());
+    offset += field_metas_[i].len();
   }
   RC rc = index_handler_.delete_entry(key, rid);
   free(key);
