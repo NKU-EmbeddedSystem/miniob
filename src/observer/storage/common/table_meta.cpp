@@ -164,15 +164,20 @@ const IndexMeta * TableMeta::index(const char *name) const {
   return nullptr;
 }
 
-const IndexMeta *const TableMeta::find_index_by_field(const char *field) const {
+const IndexMeta *TableMeta::find_index_by_fields(const char* fields[], int field_count) const {
+  std::vector<std::string> vec_fields;
+  vec_fields.reserve(field_count);
+  for (int i = 0; i < field_count; ++i) {
+    vec_fields.emplace_back(fields[i]);
+  }
   for (const IndexMeta &index : indexes_) {
-    if (0 == strcmp(index.field(), field)) {
+    if (index.compare(vec_fields)) {
       return &index;
     }
   }
 
   for (const IndexMeta &index : unique_indexes_) {
-    if (0 == strcmp(index.field(), field)) {
+    if (index.compare(vec_fields)) {
       return &index;
     }
   }

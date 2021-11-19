@@ -120,13 +120,13 @@ typedef struct {
 typedef struct {
   char *indexName; // Index name
   char *relName;   // Relation name
-  char *attrName;  // Attribute name
+  int attr_count;  // attr count
+  char *attrName[MAX_NUM];  // Attribute name
 } CreateIndex;
 
 // struct of  drop_index
 typedef struct {
   char *indexName; // Index name
-
 } DropIndex;
 
 // union of sql_structs
