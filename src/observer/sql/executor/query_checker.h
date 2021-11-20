@@ -15,7 +15,7 @@ using std::vector;
 
 class QueryChecker {
 private:
-  typedef RC (QueryChecker::*relattr_match_func_t)(const RelAttr &, AttrType *attr_type);
+  typedef RC (QueryChecker::*relattr_match_func_t)(const RelAttr &, AttrType *attr_type, bool augment);
   typedef RC (QueryChecker::*select_list_fields_check_func_t)();
 
 public:
@@ -30,8 +30,8 @@ public:
   RC check_fields();
 
 private:
-  RC non_nullable_relattr_match_any_table(const RelAttr &rel_attr, AttrType *attr_type);
-  RC nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
+  RC non_nullable_relattr_match_any_table(const RelAttr &rel_attr, AttrType *attr_type, bool augment);
+  RC nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type, bool augment);
   RC check_from_relations_and_init_tables() { return check_from_relations_and_init_tables_helper(selects_.relations, selects_.relation_num); }
   RC check_from_relations_and_init_tables_helper(const char * const relations[], int relation_num);
   RC check_where_fields() { return check_where_fields_helper(selects_.conditions, selects_.condition_num, false); }
@@ -49,7 +49,7 @@ private:
   RC check_and_augment_relations_from_where_fields(Subquery *subquery);
   bool relation_in(const char *relation_name, const vector<Table *> &tables, Table **);
   RC check_subquery_select_attribute(const Subquery *subquery);
-  RC subquery_select_attr_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type);
+  RC subquery_select_attr_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type, bool augment);
   RC check_group_by_fields();
   bool find_group_by_field_in_attribute_list(const RelAttr &group_by_field);
   RC check_attribute_list_fields();

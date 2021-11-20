@@ -107,7 +107,7 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
     }
 
     if (is_attr(&condition.left)) {
-      rc = (this->*relattr_match_table_)(condition.left.attr, nullptr);
+      rc = (this->*relattr_match_table_)(condition.left.attr, nullptr, true);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -119,7 +119,7 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
     }
 
     if (is_attr(&condition.right)) {
-      rc = (this->*relattr_match_table_)(condition.right.attr, nullptr);
+      rc = (this->*relattr_match_table_)(condition.right.attr, nullptr, true);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -146,7 +146,7 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
   return RC::SUCCESS;
 }
 
-RC QueryChecker::non_nullable_relattr_match_any_table(const RelAttr &rel_attr, AttrType *attr_type) {
+RC QueryChecker::non_nullable_relattr_match_any_table(const RelAttr &rel_attr, AttrType *attr_type, bool augment) {
   const FieldMeta *field_meta;
 
   if (!is_checking_subquery() && rel_attr.relation_name == nullptr) {
@@ -168,7 +168,7 @@ RC QueryChecker::non_nullable_relattr_match_any_table(const RelAttr &rel_attr, A
   return RC::SCHEMA_FIELD_NOT_EXIST;
 }
 
-RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type) {
+RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type, bool augment) {
   Table *table = global_tables_[0];
   const FieldMeta *field_meta;
 
@@ -185,7 +185,9 @@ RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType 
       return RC::SCHEMA_FIELD_NOT_EXIST;
     }
 
-    const_cast<RelAttr &>(rel_attr).relation_name = strdup(table->name());
+    if (augment) {
+      const_cast<RelAttr &>(rel_attr).relation_name = strdup(table->name());
+    }
 
     if (attr_type != nullptr) {
       *attr_type = field_meta->type();
@@ -511,7 +513,7 @@ RC QueryChecker::check_subquery_select_attribute(const Subquery *subquery) {
     }
 
     if (agg_desc.agg_operand_type == AGG_FIELD) {
-      rc = subquery_select_attr_nullable_relattr_match_table(agg_desc.agg_attr, &agg_field_type);
+      rc = subquery_select_attr_nullable_relattr_match_table(agg_desc.agg_attr, &agg_field_type, true);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -524,11 +526,11 @@ RC QueryChecker::check_subquery_select_attribute(const Subquery *subquery) {
 
     return RC::SUCCESS;
   } else {
-    return subquery_select_attr_nullable_relattr_match_table(subquery->attribute, nullptr);
+    return subquery_select_attr_nullable_relattr_match_table(subquery->attribute, nullptr, true);
   }
 }
 
-RC QueryChecker::subquery_select_attr_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type) {
+RC QueryChecker::subquery_select_attr_nullable_relattr_match_table(const RelAttr &rel_attr, AttrType *attr_type, bool augment) {
   const FieldMeta *field_meta;
 
   if (rel_attr.relation_name == nullptr) {
@@ -586,7 +588,7 @@ RC QueryChecker::check_group_by_fields() {
   for (int i = 0; i < selects_.group_by_num; i++) {
     const auto &rel_attr = selects_.group_by_attributes[i];
 
-    rc = (this->*relattr_match_table_)(rel_attr, nullptr);
+    rc = (this->*relattr_match_table_)(rel_attr, nullptr, false);
     if (rc != RC::SUCCESS) {
       return rc;
     }
@@ -631,7 +633,7 @@ RC QueryChecker::check_aggregation_list_fields() {
     }
 
     if (selects_.aggs[i].agg_operand_type == AGG_FIELD) {
-      rc = (this->*relattr_match_table_)(agg_desc.agg_attr, &agg_field_type);
+      rc = (this->*relattr_match_table_)(agg_desc.agg_attr, &agg_field_type, false);
       if (rc != RC::SUCCESS) {
         return rc;
       }
@@ -657,7 +659,7 @@ RC QueryChecker::check_attribute_list_fields() {
       return RC::SUCCESS;
     }
 
-    rc = (this->*relattr_match_table_)(rel_attr, nullptr);
+    rc = (this->*relattr_match_table_)(rel_attr, nullptr, false);
     if (rc != RC::SUCCESS) {
       return rc;
     }
