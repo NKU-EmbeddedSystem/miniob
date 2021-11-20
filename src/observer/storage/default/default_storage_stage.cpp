@@ -159,6 +159,9 @@ void DefaultStorageStage::handle_event(StageEvent *event) {
 
   RC rc = RC::SUCCESS;
 
+  global_trx = current_trx;
+  global_db = current_db;
+
   char response[256];
   switch (sql->flag)
   {
