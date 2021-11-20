@@ -136,11 +136,6 @@ RC QueryChecker::check_where_fields_helper(const Condition conditions[], int con
         return rc;
       }
     }
-
-    rc = check_and_push_extra_in_comparator_condition(condition);
-    if (rc != RC::SUCCESS) {
-      return rc;
-    }
   }
 
   return RC::SUCCESS;
@@ -194,57 +189,6 @@ RC QueryChecker::nullable_relattr_match_table(const RelAttr &rel_attr, AttrType 
     }
   }
 
-  return RC::SUCCESS;
-}
-
-RC QueryChecker::check_and_push_extra_in_comparator_condition(const Condition &condition) {
-  if (condition.comp != COND_IN && condition.comp != NOT_IN) {
-    return RC::SUCCESS;
-  }
-
-  const RelAttr &in_attr = condition.left.attr;
-  Subquery *subquery = condition.right.subquery;
-
-  if (subquery->condition_num >= MAX_NUM) {
-    LOG_ERROR("Fail to push IN condition into subquery: too much conditions");
-    return RC::GENERIC_ERROR;
-  }
-
-  Condition &subquery_in_condition = subquery->conditions[subquery->condition_num];
-
-  // set comparator
-  subquery_in_condition.comp = (condition.comp == COND_IN) ? EQUAL_TO : NOT_EQUAL;
-
-  // set left side
-  subquery_in_condition.left.type = COND_FIELD;
-  subquery_in_condition.left.attr = subquery->attribute;
-  if (subquery->attribute.relation_name == nullptr) {
-    if (subquery->relation_num != 1) {
-      LOG_ERROR("Inconsistent internal state: subquery has multiple relations with no identifier");
-      return RC::GENERIC_ERROR;
-    }
-    subquery_in_condition.left.attr.relation_name = strdup(subquery->relations[0]);
-  }
-
-  // set right side
-  subquery_in_condition.right.type = COND_FIELD;
-  subquery_in_condition.right.attr = in_attr;
-  if (in_attr.relation_name == nullptr) {
-    // these two checks should never fail
-    if (local_tables_ != &global_tables_) {
-      LOG_ERROR("Inconsistent internal state: subquery condition identifier adder failed");
-      return RC::GENERIC_ERROR;
-    }
-
-    if (local_tables_->size() != 1) {
-      LOG_ERROR("Inconsistent internal state: most outer query has multiple relations with no identifier");
-      return RC::GENERIC_ERROR;
-    }
-
-    subquery_in_condition.right.attr.relation_name = strdup((*local_tables_)[0]->name());
-  }
-
-  ++subquery->condition_num;
   return RC::SUCCESS;
 }
 
@@ -365,11 +309,7 @@ RC QueryChecker::check_subquery_where_fields(Subquery *subquery) {
     return rc;
   }
 
-  if (subquery->is_agg) {
-    rc = check_mark_subquery_lazy_and_get_result_type(subquery);
-  } else {
-    rc = check_and_augment_relations_from_where_fields(subquery);
-  }
+  rc = check_mark_subquery_lazy_and_get_result_type(subquery);
 
   if (rc != RC::SUCCESS) {
     pop_match_func_and_global_table();
@@ -428,6 +368,14 @@ RC QueryChecker::check_mark_subquery_lazy_and_get_result_type(Subquery *subquery
     }
   }
 
+  if (subquery->is_agg) {
+    subquery->result_type = AggregatorManager::result_type(subquery->agg, db_);
+  } else {
+    subquery->result_type = DefaultHandler::get_default()
+            .find_table(db_, subquery->attribute.relation_name)
+            ->table_meta().field(subquery->attribute.attribute_name)->type();
+  }
+
   return RC::SUCCESS;
 }
 
@@ -440,51 +388,12 @@ RC QueryChecker::check_mark_condition_field_refers_outer(Subquery *subquery, Con
 
     if (in_global) {
       cond_field.refers_outer = 1;
-      if (!subquery->lazy) {
-        subquery->lazy = 1;
-        subquery->result_type = AggregatorManager::result_type(subquery->agg, db_);
-      }
     } else {
       LOG_ERROR("Illegal sql: %s is in neither local tables nor global tables",
                 cond_field.attr.relation_name);
       return RC::SQL_SYNTAX;
     }
   }
-
-  return RC::SUCCESS;
-}
-
-RC QueryChecker::check_and_augment_relations_from_where_fields(Subquery *subquery) {
-  int size_save;
-
-  // add while loop
-  do {
-    size_save = local_tables_->size();
-    for (int i = 0; i < subquery->condition_num; i++) {
-      Condition &condition = subquery->conditions[i];
-      if (is_attr(&condition.left) && is_attr(&condition.right)) {
-        bool left_in_local = relation_in(condition.left.attr.relation_name, *local_tables_, nullptr);
-        bool right_in_local = relation_in(condition.right.attr.relation_name, *local_tables_, nullptr);
-        if (left_in_local != right_in_local) {
-          ConditionField &field_not_in_local = left_in_local ? condition.right : condition.left;
-          Table *table;
-          if (relation_in(field_not_in_local.attr.relation_name, global_tables_, &table)) {
-            if (subquery->relation_num >= MAX_NUM) {
-              LOG_ERROR("Fail to augment subquery relations: too much relations in subquery");
-              return GENERIC_ERROR;
-            }
-            subquery->relations[subquery->relation_num] = strdup(table->name());
-            local_tables_->push_back(table);
-            ++subquery->relation_num;
-          } else {
-            LOG_ERROR("Illegal sql: %s is in neither local tables nor global tables",
-                      field_not_in_local.attr.relation_name);
-            return RC::SQL_SYNTAX;
-          }
-        }
-      }
-    }
-  } while (size_save != local_tables_->size());
 
   return RC::SUCCESS;
 }
@@ -526,7 +435,7 @@ RC QueryChecker::check_subquery_select_attribute(const Subquery *subquery) {
 
     return RC::SUCCESS;
   } else {
-    return subquery_select_attr_nullable_relattr_match_table(subquery->attribute, nullptr, true);
+    return subquery_select_attr_nullable_relattr_match_table(subquery->attribute, nullptr, false);
   }
 }
 
@@ -535,7 +444,11 @@ RC QueryChecker::subquery_select_attr_nullable_relattr_match_table(const RelAttr
 
   if (rel_attr.relation_name == nullptr) {
     if (strcmp(rel_attr.attribute_name, "*") == 0) {
-      return RC::SUCCESS;
+      if (augment) {
+        return RC::SUCCESS;
+      } else {
+        return RC::SQL_SYNTAX;
+      }
     }
 
     if (local_tables_->size() > 1) {

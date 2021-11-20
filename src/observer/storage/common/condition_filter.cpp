@@ -229,16 +229,7 @@ int DefaultConditionFilter::subquery_filter(const Record &rec, bool *has_null) c
     value = (char *)left_.value;
     left_value = TupleValue::from(attr_type_, value);
   } else {
-    if (left_.subquery->lazy) {
-      if (!is_attr(right_)) {
-        LOG_ERROR("Inconsistent state: left is lazy subquery while right is not outer attribute");
-        *has_null = true;
-        goto force_has_null;
-      }
       left_lazy = true;
-    } else {
-      left_value = static_cast<TupleValue *>(left_.subquery->result)->clone();
-    }
   }
 
   if (is_attr(right_)) {
@@ -252,27 +243,31 @@ int DefaultConditionFilter::subquery_filter(const Record &rec, bool *has_null) c
     value = (char *)right_.value;
     right_value = TupleValue::from(attr_type_, value);
   } else {
-    if (right_.subquery->lazy) {
-      if (!is_attr(left_)) {
-        LOG_ERROR("Inconsistent state: right is lazy subquery while left is not outer attribute");
-        *has_null = true;
-        goto force_has_null;
-      }
       right_lazy = true;
-    } else {
-      right_value = static_cast<TupleValue *>(right_.subquery->result)->clone();
-    }
   }
 
-  if (left_lazy) {
-    subquery_context.emplace_back(make_pair(right_.rel_attr, right_value));
+  if (left_lazy && right_lazy) {
     evaluate_subquery(left_.subquery, global_db, global_trx);
-    subquery_context.pop_back();
+    left_value = static_cast<TupleValue *>(left_.subquery->result);
+    evaluate_subquery(right_.subquery, global_db, global_trx);
+    right_value = static_cast<TupleValue *>(right_.subquery->result);
+  } else if (left_lazy) {
+    if (is_attr(right_)) {
+      subquery_context.emplace_back(make_pair(right_.rel_attr, right_value));
+    }
+    evaluate_subquery(left_.subquery, global_db, global_trx);
+    if (is_attr(right_)) {
+      subquery_context.pop_back();
+    }
     left_value = static_cast<TupleValue *>(left_.subquery->result);
   } else if (right_lazy) {
-    subquery_context.emplace_back(left_.rel_attr, left_value);
+    if (is_attr(left_)) {
+      subquery_context.emplace_back(left_.rel_attr, left_value);
+    }
     evaluate_subquery(right_.subquery, global_db, global_trx);
-    subquery_context.pop_back();
+    if (is_attr(left_)) {
+      subquery_context.pop_back();
+    }
     right_value = static_cast<TupleValue *>(right_.subquery->result);
   }
 
@@ -368,10 +363,15 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     }
 
     bool found;
-    TupleValue *temp_tuple_value_from_record = TupleValue::from(attr_type_, left_value);
-    auto set = static_cast<Set *>(subquery->result);
-    found = (set->find(temp_tuple_value_from_record) != set->end());
-    delete temp_tuple_value_from_record;
+    TupleValue *left_tuple_value_from_record = TupleValue::from(attr_type_, left_value);
+
+    subquery_context.emplace_back(left_.rel_attr, left_tuple_value_from_record);
+    evaluate_subquery(right_.subquery, global_db, global_trx);
+    subquery_context.pop_back();
+    auto set = static_cast<Set *>(right_.subquery->result);
+    found = (set->find(left_tuple_value_from_record) != set->end());
+    delete left_tuple_value_from_record;
+    delete set;
     return (comp_op_ == COND_IN) == found;
   }
 

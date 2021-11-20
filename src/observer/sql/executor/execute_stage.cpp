@@ -437,8 +437,6 @@ void free_subquery_helper(Subquery *subquery) {
 }
 
 void free_subquery(Selects &selects) {
-  free_condition_results(selects.conditions, selects.condition_num);
-
   for (int i = 0; i < selects.condition_num; i++) {
     Condition &condition = selects.conditions[i];
     if (is_subquery(&condition.left)) {
@@ -551,11 +549,6 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
 //  print_subquery("", selects.conditions, selects.condition_num);
   QueryChecker query_checker(db, selects);
   rc = query_checker.check_fields();
-  if (rc != RC::SUCCESS) {
-    RETURN_FAILURE;
-  }
-
-  rc = evaluate_conditions(sql->sstr.selection.conditions, sql->sstr.selection.condition_num, db, trx);
   if (rc != RC::SUCCESS) {
     RETURN_FAILURE;
   }
