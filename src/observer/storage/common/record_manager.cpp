@@ -426,7 +426,11 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
     }
 
     // 找到空闲位置
-    ret = record_page_handler_.insert_record(data + cur, rid);
+    if (cur == 0)
+      ret = record_page_handler_.insert_record(data, rid);
+    else
+      ret = record_page_handler_.insert_record(data + cur - 4, rid);
+
     if (ret != RC::SUCCESS)
       return ret;
 
