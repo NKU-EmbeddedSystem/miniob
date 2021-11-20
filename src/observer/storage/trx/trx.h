@@ -87,7 +87,7 @@ public:
 
 public:
   RC insert_record(Table *table, Record *record);
-  RC delete_record(Table *table, Record *record);
+  RC delete_record(Table *table, Record *record, const std::vector<RID> &rids);
   RC update_record(Table *table, Record *record);
 
   RC commit();
