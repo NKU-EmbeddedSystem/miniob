@@ -135,6 +135,8 @@ int main() {
     "group_by_test2.sql",
     "group_by_test3.sql",
     "identifier_test.sql",
+    "multi-index_install.sql",
+    "multi-index.sql",
     "nullable.sql",
     "order.sql",
     "outer_join_empty_test.sql",
