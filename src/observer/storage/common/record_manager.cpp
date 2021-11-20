@@ -355,6 +355,7 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
   int res = record_size;
   int cur = 0;
   int fixed_size = record_page_handler_.get_page_size() - page_fix_size() - 16;
+  bool overflow= record_size > fixed_size;
   while (res > 0) {
     RC ret = RC::SUCCESS;
     int can_be_allocated = 0;
@@ -411,7 +412,7 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
 
       current_page_num = page_handle.frame->page.page_num;
       record_page_handler_.deinit();
-      ret = record_page_handler_.init_empty_page(*disk_buffer_pool_, file_id_, current_page_num, res > fixed_size ? fixed_size : res);
+      ret = record_page_handler_.init_empty_page(*disk_buffer_pool_, file_id_, current_page_num, overflow ? fixed_size : res);
       if (ret != RC::SUCCESS) {
         LOG_ERROR("Failed to init empty page. file_id:%d, ret:%d", file_id_, ret);
         if (RC::SUCCESS != disk_buffer_pool_->unpin_page(&page_handle)) {
