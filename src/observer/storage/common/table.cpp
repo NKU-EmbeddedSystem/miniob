@@ -454,6 +454,7 @@ bool do_unique_select(const _Value &value, Table *table, const char *field_name,
   relation_attr_init(&attr, table->name(), field_name);
   // condition
   Condition condition;
+  memset(&condition, 0, sizeof(Condition));
   condition.left.attr = attr;
   condition.left.type = COND_FIELD;
   condition.right.value = value;
