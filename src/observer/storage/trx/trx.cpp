@@ -67,20 +67,22 @@ RC Trx::insert_record(Table *table, Record *record) {
   return rc;
 }
 
-RC Trx::delete_record(Table *table, Record *record) {
+RC Trx::delete_record(Table *table, Record *record, const std::vector<RID> &rids) {
   RC rc = RC::SUCCESS;
   start_if_not_started();
-  Operation *old_oper = find_operation(table, record->rid);
-  if (old_oper != nullptr) {
-    if (old_oper->type() == Operation::Type::INSERT) {
-      delete_operation(table, record->rid);
-      return RC::SUCCESS;
-    } else {
-      return RC::GENERIC_ERROR;
+  for (const auto &rid : rids) {
+    Operation *old_oper = find_operation(table, rid);
+    if (old_oper != nullptr) {
+      if (old_oper->type() == Operation::Type::INSERT) {
+        delete_operation(table, rid);
+        return RC::SUCCESS;
+      } else {
+        return RC::GENERIC_ERROR;
+      }
     }
+    insert_operation(table, Operation::Type::DELETE, rid);
   }
   set_record_trx_id(table, *record, trx_id_, true);
-  insert_operation(table, Operation::Type::DELETE, record->rid);
   return rc;
 }
 
