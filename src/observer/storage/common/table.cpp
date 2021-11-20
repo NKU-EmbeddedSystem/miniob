@@ -618,6 +618,8 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
     limit = INT_MAX;
   }
 
+  int per_size = (table_meta_.record_size() + 4055) / 4056;
+
   IndexScanner *index_scanner = find_index_for_scan(filter);
   if (index_scanner != nullptr) {
     return scan_record_by_index(trx, index_scanner, filter, limit, context, record_reader);
@@ -625,7 +627,11 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
 
   RC rc = RC::SUCCESS;
   RecordFileScanner scanner;
-  rc = scanner.open_scan(*data_buffer_pool_, file_id_, filter);
+  if (per_size == 1)
+    rc = scanner.open_scan(*data_buffer_pool_, file_id_, filter);
+  else
+    rc = scanner.open_scan(*data_buffer_pool_, file_id_, nullptr);
+
   if (rc != RC::SUCCESS) {
     LOG_ERROR("failed to open scanner. file id=%d. rc=%d:%s", file_id_, rc, strrc(rc));
     return rc;
@@ -634,7 +640,6 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   int record_count = 0;
   int offset = 0;
   int len = 4056;
-  int per_size = (table_meta_.record_size() + 4055) / 4056;
   Record record{}, tmp;
   if (per_size > 1)
     record.data = static_cast<char *>(malloc(table_meta_.record_size() + 4));
@@ -646,12 +651,18 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
         rc = record_reader(&tmp, context);
       }
       else {
+        RID rid = tmp.rid;
+        rollback_rids.emplace_back(rid);
         connect_record(record, tmp, offset, table_meta_.record_size() - offset > len ? len : table_meta_.record_size() - offset);
         offset += 4056;
         if (record_count % per_size == 0) {
-          rc = record_reader(&record, context);
+          if (filter == nullptr || filter->filter(record)) {
+              rc = record_reader(&record, context);
+          }
+//          rc = record_reader(&record, context);
           memset(record.data, 0, table_meta_.record_size() + 4);
           offset = 0;
+          rollback_rids.clear();
         }
       }
       if (rc != RC::SUCCESS) {
@@ -1060,15 +1071,30 @@ RC Table::delete_record(Trx *trx, ConditionFilter *filter, int *deleted_count) {
 
 RC Table::delete_record(Trx *trx, Record *record) {
   RC rc = RC::SUCCESS;
+  int times = (table_meta_.record_size() + 4055) / 4056;
   if (trx != nullptr) {
-    rc = trx->delete_record(this, record);
+    if (times > 1)
+      rc = trx->delete_record(this, record, rollback_rids);
+    else {
+      std::vector<RID> single_rid;
+      single_rid.push_back(record->rid);
+      rc = trx->delete_record(this, record, single_rid);
+    }
   } else {
     rc = delete_entry_of_indexes(record->data, record->rid, false);// 重复代码 refer to commit_delete
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to delete indexes of record (rid=%d.%d). rc=%d:%s",
                 record->rid.page_num, record->rid.slot_num, rc, strrc(rc));
     } else {
-      rc = record_handler_->delete_record(&record->rid);
+      if (times > 1) {
+        for (const auto &rid: rollback_rids) {
+          rc = record_handler_->delete_record(&rid);
+          if (rc != RC::SUCCESS)
+            return rc;
+        }
+      } else {
+        rc = record_handler_->delete_record(&record->rid);
+      }
     }
   }
   return rc;
