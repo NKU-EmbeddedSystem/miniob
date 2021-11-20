@@ -641,13 +641,12 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   for ( ; RC::SUCCESS == rc && record_count < limit; rc = scanner.get_next_record(&tmp)) {
     if (trx == nullptr || trx->is_visible(this, &tmp)) {
       record_count++;
+      connect_record(record, tmp, offset, table_meta_.record_size() - offset > len ? len : table_meta_.record_size() - offset);
+      offset += 4056;
       if (record_count % per_size == 0) {
         rc = record_reader(&record, context);
         memset(record.data, 0, table_meta_.record_size() + 4);
         offset = 0;
-      } else {
-        connect_record(record, tmp, offset, table_meta_.record_size() - offset > len ? len : table_meta_.record_size() - offset);
-        offset += 4056;
       }
       if (rc != RC::SUCCESS) {
         break;
