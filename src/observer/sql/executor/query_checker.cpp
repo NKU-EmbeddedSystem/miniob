@@ -435,7 +435,7 @@ RC QueryChecker::check_subquery_select_attribute(const Subquery *subquery) {
 
     return RC::SUCCESS;
   } else {
-    return subquery_select_attr_nullable_relattr_match_table(subquery->attribute, nullptr, true);
+    return subquery_select_attr_nullable_relattr_match_table(subquery->attribute, nullptr, false);
   }
 }
 
@@ -444,7 +444,11 @@ RC QueryChecker::subquery_select_attr_nullable_relattr_match_table(const RelAttr
 
   if (rel_attr.relation_name == nullptr) {
     if (strcmp(rel_attr.attribute_name, "*") == 0) {
-      return RC::SQL_SYNTAX;
+      if (augment) {
+        return RC::SUCCESS;
+      } else {
+        return RC::SQL_SYNTAX;
+      }
     }
 
     if (local_tables_->size() > 1) {
