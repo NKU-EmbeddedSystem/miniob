@@ -32,14 +32,14 @@ RC evaluate_conditions(Condition conditions[], int condition_num, const char *db
 static RC evaluate_condition(Condition &condition, const char *db, Trx *trx) {
   RC rc;
 
-  if (is_subquery(&condition.left) && !condition.left.subquery->lazy) {
+  if (is_subquery(&condition.left)) {
     rc = evaluate_subquery(condition.left.subquery, db, trx);
     if (rc != RC::SUCCESS) {
       return rc;
     }
   }
 
-  if (is_subquery(&condition.right) && !condition.right.subquery->lazy) {
+  if (is_subquery(&condition.right)) {
     rc = evaluate_subquery(condition.right.subquery, db, trx);
     if (rc != RC::SUCCESS) {
       return rc;
@@ -49,50 +49,8 @@ static RC evaluate_condition(Condition &condition, const char *db, Trx *trx) {
   return RC::SUCCESS;
 }
 
-static void free_subquery_result(Subquery *subquery) {
-  if (subquery->result == nullptr) {
-    LOG_ERROR("Inconsistent state: want to free subquery result but find nullptr");
-    return;
-  }
-
-  if (subquery->is_agg) {
-    if (!subquery->lazy) {
-      TupleValue *value = static_cast<TupleValue *>(subquery->result);
-      delete value;
-    }
-  } else {
-    using Set = std::unordered_set<TupleValue *, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
-    Set *set = static_cast<Set *>(subquery->result);
-    for (auto ptr : *set) {
-      delete ptr;
-    }
-    delete set;
-  }
-
-  subquery->result = nullptr;
-}
-
-void free_condition_results(Condition conditions[], int condition_num) {
-  for (int i = 0; i < condition_num; i++) {
-    Condition &condition = conditions[i];
-
-    if (is_subquery(&condition.left)) {
-      free_subquery_result(condition.left.subquery);
-    }
-    if (is_subquery(&condition.right)) {
-      free_subquery_result(condition.right.subquery);
-    }
-  }
-}
-
-#define ROLL_BACK_CONDITION_RESULTS \
-do { \
-  free_condition_results(subquery->conditions, subquery->condition_num); \
-} while(0)
-
 #define ROLL_BACK_SELECT_EXE_NODES \
 do {                               \
-  ROLL_BACK_CONDITION_RESULTS; \
   for (SelectExeNode *& tmp_node: select_nodes) { \
     delete tmp_node; \
   }                                \
@@ -114,7 +72,7 @@ RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
   SingleRelationSelectExeNodeCreator node_creator(db, selects, trx);
   rc = node_creator.create(select_nodes, extra_counts);
   if (rc != RC::SUCCESS) {
-    ROLL_BACK_CONDITION_RESULTS;
+//    ROLL_BACK_CONDITION_RESULTS;
     return rc;
   }
 
@@ -198,8 +156,8 @@ RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
 
     TupleValue *result = agg_tuple_set.tuples()[0].get(0).clone();
     subquery->result = result;
-    if (!subquery->lazy)
-      subquery->result_type = result->type();
+//    if (!subquery->lazy)
+//      subquery->result_type = result->type();
   } else {
     if (result_tuple_set->schema().fields().size() != 1) {
       LOG_ERROR("After execute subquery, schema size invalid: %d", result_tuple_set->schema().fields().size());
@@ -214,7 +172,6 @@ RC evaluate_subquery(Subquery *subquery, const char *db, Trx *trx) {
     subquery->result_type = result_tuple_set->schema().field(0).type();
   }
 
-  free_condition_results(subquery->conditions, subquery->condition_num);
   for (SelectExeNode *& tmp_node: select_nodes) {
     delete tmp_node;
   }

@@ -144,6 +144,7 @@ int main() {
     "subquery_syntax_test.sql",
     "subquery_test.sql",
     "unique.sql",
+    "unique2.sql",
     "where_test.sql",
   });
 }
