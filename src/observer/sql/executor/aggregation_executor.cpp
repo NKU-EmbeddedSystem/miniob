@@ -32,13 +32,11 @@ void AggregationExecutor::collect_result(AggTupleSet &out_tuple_set) {
     schema.add(aggregator->desc());
   }
 
-  if (!in_tuple_set_.is_empty()) {
-    Tuple tuple;
+  Tuple tuple;
 
-    for (auto aggregator: aggregators) {
-      tuple.add(const_cast<TupleValue *>(aggregator->result()));
-    }
-
-    out_tuple_set.add(std::move(tuple));
+  for (auto aggregator: aggregators) {
+    tuple.add(const_cast<TupleValue *>(aggregator->result()));
   }
+
+  out_tuple_set.add(std::move(tuple));
 }

@@ -38,7 +38,9 @@ typedef enum {
   GREAT_THAN,   //">"     5
   NO_OP,
   IS_OP,
-  IS_NOT_OP
+  IS_NOT_OP,
+  COND_IN,
+  NOT_IN
 } CompOp;
 
 //属性值类型
@@ -50,16 +52,30 @@ typedef struct _Value {
   void *data;     // value
 } Value;
 
+typedef enum {
+  COND_VALUE,
+  COND_FIELD,
+  COND_SUBQUERY,
+} ConditionFieldType;
+
+struct Subquery;
+
+typedef struct _ConditionField {
+  ConditionFieldType type;
+  union {
+    Value value;
+    struct {
+      RelAttr attr;
+      int refers_outer;
+    };
+    struct Subquery * subquery;
+  };
+} ConditionField;
+
 typedef struct _Condition {
-  int left_is_attr;    // TRUE if left-hand side is an attribute
-                       // 1时，操作符左边是属性名，0时，是属性值
-  Value left_value;    // left-hand side value if left_is_attr = FALSE
-  RelAttr left_attr;   // left-hand side attribute
+  ConditionField left;
+  ConditionField right;
   CompOp comp;         // comparison operator
-  int right_is_attr;   // TRUE if right-hand side is an attribute
-                       // 1时，操作符右边是属性名，0时，是属性值
-  RelAttr right_attr;  // right-hand side attribute if right_is_attr = TRUE 右边的属性
-  Value right_value;   // right-hand side value if right_is_attr = FALSE
 } Condition;
 
 typedef enum { AGG_MAX, AGG_MIN, AGG_COUNT, AGG_AVG} AggType;
@@ -97,6 +113,21 @@ typedef struct {
   Order  orders[MAX_NUM];  //order attrs for Order
   size_t order_num;
 } Selects;
+
+struct Subquery {
+  int is_agg;
+  union {
+    RelAttr   attribute;    // attrs in Select clause
+    AggDesc   agg;          // descriptor for each aggregation operation
+  };
+  int lazy;
+  AttrType result_type;
+  void *result;
+  size_t    relation_num;           // Length of relations in Fro clause
+  char *    relations[MAX_NUM];     // relations in From clause
+  size_t    condition_num;          // Length of conditions in Where clause
+  Condition conditions[MAX_NUM];    // conditions in Where clause
+};
 
 // struct of insert
 typedef struct {
@@ -221,8 +252,19 @@ void value_init_null(Value *value);
 int value_validation(Value *value);
 void value_destroy(Value *value);
 
-void condition_init(Condition *condition, CompOp comp, int left_is_attr, RelAttr *left_attr, Value *left_value,
-    int right_is_attr, RelAttr *right_attr, Value *right_value);
+ConditionField *condition_field_init_value(Value *value);
+ConditionField *condition_field_init_attr(char *relation_name, char *attribute_name);
+ConditionField *condition_field_init_subquery(struct Subquery *subquery);
+void subquery_set_attribute(struct Subquery *subquery, RelAttr *rel_attr);
+void subquery_set_agg(struct Subquery *subquery, AggDesc *agg_desc);
+void subquery_append_relation(struct Subquery *subquery, const char *relation_name);
+void subquery_append_condition(struct Subquery *subquery, Condition *condition);
+inline int is_value(const ConditionField *condition_field) { return condition_field->type == COND_VALUE; }
+inline int is_attr(const ConditionField *condition_field) { return condition_field->type == COND_FIELD; }
+inline int is_subquery(const ConditionField *condition_field) { return condition_field->type == COND_SUBQUERY; }
+
+void condition_init(Condition *condition, ConditionField *left, ConditionField *right, CompOp comp);
+
 void condition_destroy(Condition *condition);
 
 void attr_info_init(AttrInfo *attr_info, const char *name, AttrType type, size_t length, int null_def);
@@ -231,6 +273,7 @@ void attr_info_destroy(AttrInfo *attr_info);
 void agg_desc_init_string(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, char *relation_name, char *attribute_name);
 void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, int number);
 
+const char *comp_op_name(CompOp comp);
 const char *agg_type_name(AggType agg_type);
 const char *agg_operand_name(AggOperandType operand_type);
 

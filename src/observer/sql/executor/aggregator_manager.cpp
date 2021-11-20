@@ -4,6 +4,8 @@
 
 #include "aggregator_manager.h"
 #include "common/log/log.h"
+#include "storage/default/default_handler.h"
+#include "storage/common/table.h"
 
 AggregatorManager::~AggregatorManager() {
   for (auto aggregator : aggregators_) {
@@ -84,6 +86,26 @@ RC AggregatorManager::find_pos_of_agg_field_in_schema(const RelAttr &rel_attr, i
   return RC::SUCCESS;
 }
 
+AttrType AggregatorManager::result_type(const AggDesc &agg_desc, const char *db) {
+  auto agg_type = agg_desc.agg_type;
+
+  switch (agg_type) {
+    case AGG_COUNT: {
+      return INTS;
+    }
+    case AGG_MAX:
+    case AGG_MIN: {
+      return DefaultHandler::get_default().find_table(db, agg_desc.agg_attr.relation_name)
+        ->table_meta().field(agg_desc.agg_attr.attribute_name)->type();
+    }
+    case AGG_AVG: {
+      return FLOATS;
+    }
+  }
+
+  LOG_ERROR("Fail to get aggregation desc result type");
+  return UNDEFINED;
+}
 void AggregatorManager::reset() {
   for (auto aggregator : aggregators_) {
     aggregator->reset();

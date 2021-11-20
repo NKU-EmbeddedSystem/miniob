@@ -13,25 +13,31 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <stddef.h>
+#include <unordered_set>
+
 #include "condition_filter.h"
 #include "record_manager.h"
 #include "common/log/log.h"
 #include "storage/common/table.h"
 #include "sql/executor/value.h"
+#include "sql/executor/subquery.h"
+#include "storage/default/default_handler.h"
 
 using namespace common;
+using std::unordered_set;
+using std::make_pair;
 
 ConditionFilter::~ConditionFilter()
 {}
 
 DefaultConditionFilter::DefaultConditionFilter()
 {
-  left_.is_attr = false;
+//  left_.is_attr = false;
   left_.attr_length = 0;
   left_.attr_offset = 0;
   left_.value = nullptr;
 
-  right_.is_attr = false;
+//  right_.is_attr = false;
   right_.attr_length = 0;
   right_.attr_offset = 0;
   right_.value = nullptr;
@@ -67,61 +73,77 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
   AttrType type_left = UNDEFINED;
   AttrType type_right = UNDEFINED;
 
-  if (1 == condition.left_is_attr) {
-    left.is_attr = true;
-    const FieldMeta *field_left = table_meta.field(condition.left_attr.attribute_name);
+  left.type = condition.left.type;
+  if (is_attr(&condition.left)) {
+    left.rel_attr = condition.left.attr;
+    left.refers_outer = condition.left.refers_outer;
+    const FieldMeta *field_left;
+
+    if (left.refers_outer) {
+      field_left = DefaultHandler::get_default().find_table(global_db, left.rel_attr.relation_name)->table_meta().field(left.rel_attr.attribute_name);
+    } else {
+      field_left = table_meta.field(condition.left.attr.attribute_name);
+    }
+
     if (nullptr == field_left) {
-      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.left_attr.attribute_name);
+      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.left.attr.attribute_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
+
     left.nullable_ = field_left->is_nullable();
     left.attr_length = field_left->len();
     left.attr_offset = field_left->offset();
     left.value = nullptr;
     type_left = field_left->type();
-  } else {
-    left.is_attr = false;
-    left.value = condition.left_value.data;  // 校验type 或者转换类型
-    type_left = condition.left_value.type;
+  } else if (is_value(&condition.left)){
+    left.value = condition.left.value.data;  // 校验type 或者转换类型
+    type_left = condition.left.value.type;
 
     left.nullable_ = false;
     left.attr_length = 0;
     left.attr_offset = 0;
+  } else {
+    left.subquery = condition.left.subquery;
+    type_left = condition.left.subquery->result_type;
   }
 
-  if (1 == condition.right_is_attr) {
-    right.is_attr = true;
-    const FieldMeta *field_right = table_meta.field(condition.right_attr.attribute_name);
+  right.type = condition.right.type;
+  if (is_attr(&condition.right)) {
+    right.rel_attr = condition.right.attr;
+    right.refers_outer = condition.right.refers_outer;
+    const FieldMeta *field_right;
+
+    if (right.refers_outer) {
+      field_right = DefaultHandler::get_default().find_table(global_db, right.rel_attr.relation_name)->table_meta().field(right.rel_attr.attribute_name);
+    } else {
+      field_right = table_meta.field(condition.right.attr.attribute_name);
+    }
+
     if (nullptr == field_right) {
-      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.right_attr.attribute_name);
+      LOG_WARN("No such field in condition. %s.%s", table.name(), condition.right.attr.attribute_name);
       return RC::SCHEMA_FIELD_MISSING;
     }
+
     right.nullable_ = field_right->is_nullable();
     right.attr_length = field_right->len();
     right.attr_offset = field_right->offset();
     type_right = field_right->type();
 
     right.value = nullptr;
-  } else {
-    right.is_attr = false;
-    right.value = condition.right_value.data;
-    type_right = condition.right_value.type;
+  } else if (is_value(&condition.right)){
+    right.value = condition.right.value.data;
+    type_right = condition.right.value.type;
 
     right.nullable_ = false;
     right.attr_length = 0;
     right.attr_offset = 0;
+  } else {
+    right.subquery = condition.right.subquery;
+    type_right = condition.right.subquery->result_type;
   }
 
-  if (type_left == NULLS) {
-    left.isnull_ = true;
-  } else {
-    left.isnull_ = false;
-  }
-  if (type_right == NULLS) {
-    right.isnull_ = true;
-  } else {
-    right.isnull_ = false;
-  }
+  left.isnull_ = (type_left == NULLS);
+  right.isnull_ = (type_right == NULLS);
 
   // 校验和转换
   //  if (!field_type_compare_compatible_table[type_left][type_right]) {
@@ -134,35 +156,141 @@ RC DefaultConditionFilter::init(const Table &table, const Condition &condition)
     if (type_left == NULLS || type_right == NULLS) {
       goto match;
     }
-    if (left.is_attr != right.is_attr) {
-      ConDesc &attr_cond = left.is_attr ? left : right;
-      ConDesc &scalar_cond = left.is_attr ? right : left;
-      AttrType attr_type = left.is_attr ? type_left : type_right;
-      AttrType scalar_type = left.is_attr ? type_right : type_left;
+
+    if (((type_left == INTS && type_right == FLOATS) || (type_left == FLOATS && type_right == INTS))
+      && !((is_attr(left) && is_attr(right)))) {
+      float_int_ = true;
+      int_left_ = (type_left == INTS);
+      goto match;
+    }
+    // subquery type can be viewed the same as attribute
+    if ((is_value(left) && !is_value(right)) || (!is_value(left) && is_value(right))) {
+      ConDesc &attr_cond = is_value(left) ? right : left;
+      ConDesc &value_cond = is_value(left) ? left : right;
+      AttrType attr_type = is_value(left) ? type_right : type_left;
+      AttrType value_type = is_value(left) ? type_left : type_right;
 
       // rewrite date value
-      if (attr_type == DATE && scalar_type == CHARS) {
+      if (attr_type == DATE && value_type == CHARS) {
         tm t;
 
         // validate and rewrite scalar value
         if (DateValue::validate_data_format(
-                static_cast<const char *>(scalar_cond.value), &t)) {
-          *reinterpret_cast<date_t *>(scalar_cond.value) = DateValue::to_raw_data(&t);
+                static_cast<const char *>(value_cond.value), &t)) {
+          *reinterpret_cast<date_t *>(value_cond.value) = DateValue::to_raw_data(&t);
 
           // for later init() parameter
           type_left = DATE;
 
           goto match;
         } else {
+          LOG_ERROR("Fail to try to rewrite date type");
           return RC::INVALID_ARGUMENT;
         }
       }
     }
+
+    LOG_ERROR("Type mismatch left: %d right: %d", type_left, type_right);
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
   }
 
 match:
   return init(left, right, type_left, condition.comp);
+}
+
+TupleValue *find_from_context(const RelAttr &refer_outer_attr) {
+  for (auto iter = subquery_context.rbegin(); iter != subquery_context.rend(); iter++) {
+    if ((strcmp(iter->first.relation_name, refer_outer_attr.relation_name) == 0)
+      && (strcmp(iter->first.attribute_name, refer_outer_attr.attribute_name) == 0)) {
+      return iter->second->clone();
+    }
+  }
+
+  LOG_ERROR("Inconsistent state: cannot find %s.%s from subquery context",
+            refer_outer_attr.relation_name, refer_outer_attr.attribute_name);
+  return new NullValue();
+}
+
+int DefaultConditionFilter::subquery_filter(const Record &rec, bool *has_null) const {
+  TupleValue *left_value = nullptr;
+  TupleValue *right_value = nullptr;
+  char *value;
+  int result;
+  bool left_lazy = false, right_lazy = false;
+
+  if (is_attr(left_)) {
+    if (left_.refers_outer) {
+      left_value = find_from_context(left_.rel_attr);
+    } else {
+      value = (char *)(rec.data + left_.attr_offset);
+      left_value = TupleValue::from(attr_type_, value);
+    }
+  } else if (is_value(left_)) {
+    value = (char *)left_.value;
+    left_value = TupleValue::from(attr_type_, value);
+  } else {
+    if (left_.subquery->lazy) {
+      if (!is_attr(right_)) {
+        LOG_ERROR("Inconsistent state: left is lazy subquery while right is not outer attribute");
+        *has_null = true;
+        goto force_has_null;
+      }
+      left_lazy = true;
+    } else {
+      left_value = static_cast<TupleValue *>(left_.subquery->result)->clone();
+    }
+  }
+
+  if (is_attr(right_)) {
+    if (right_.refers_outer) {
+      right_value = find_from_context(right_.rel_attr);
+    } else {
+      value = (char *)(rec.data + right_.attr_offset);
+      right_value = TupleValue::from(attr_type_, value);
+    }
+  } else if (is_value(right_)) {
+    value = (char *)right_.value;
+    right_value = TupleValue::from(attr_type_, value);
+  } else {
+    if (right_.subquery->lazy) {
+      if (!is_attr(left_)) {
+        LOG_ERROR("Inconsistent state: right is lazy subquery while left is not outer attribute");
+        *has_null = true;
+        goto force_has_null;
+      }
+      right_lazy = true;
+    } else {
+      right_value = static_cast<TupleValue *>(right_.subquery->result)->clone();
+    }
+  }
+
+  if (left_lazy) {
+    subquery_context.emplace_back(make_pair(right_.rel_attr, right_value));
+    evaluate_subquery(left_.subquery, global_db, global_trx);
+    subquery_context.pop_back();
+    left_value = static_cast<TupleValue *>(left_.subquery->result);
+  } else if (right_lazy) {
+    subquery_context.emplace_back(left_.rel_attr, left_value);
+    evaluate_subquery(right_.subquery, global_db, global_trx);
+    subquery_context.pop_back();
+    right_value = static_cast<TupleValue *>(right_.subquery->result);
+  }
+
+  *has_null = (left_value->is_null() || right_value->is_null());
+
+  if (!(*has_null) && float_int_) {
+    if (int_left_) {
+      left_value = FloatValue::move_from(static_cast<IntValue *>(left_value));
+    } else {
+      right_value = FloatValue::move_from(static_cast<IntValue *>(right_value));
+    }
+  }
+  result = left_value->compare(*right_value);
+  delete left_value;
+  delete right_value;
+
+force_has_null:
+  return result;
 }
 
 bool DefaultConditionFilter::filter(const Record &rec) const
@@ -171,8 +299,21 @@ bool DefaultConditionFilter::filter(const Record &rec) const
   int right_isnull = 0;
   char *left_value = nullptr;
   char *right_value = nullptr;
+  int cmp_result = 0;
 
-  if (left_.is_attr) {  // value
+  if (comp_op_ != COND_IN && comp_op_ != NOT_IN && comp_op_ != IS_OP && comp_op_ != IS_NOT_OP
+    && !((is_value(left_) && left_.isnull_) || (is_value(right_) && right_.isnull_))
+    && (float_int_ || left_.refers_outer || right_.refers_outer || is_subquery(left_) || is_subquery(right_))) {
+    bool has_null;
+    cmp_result = subquery_filter(rec, &has_null);
+    if (has_null) {
+      return false;
+    } else {
+      goto op_switch;
+    }
+  }
+
+  if (is_attr(left_)) {  // value
     if (left_.nullable_) {
       // nullable占4位
       left_isnull = *(int *)(rec.data + left_.attr_offset);
@@ -180,13 +321,15 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     }else {
       left_value = (char *)(rec.data + left_.attr_offset);
     }
-  } else {
+  } else if (is_value(left_)) {
     left_isnull = left_.isnull_;
     if (!left_isnull)
       left_value = (char *)left_.value;
+  } else {
+    LOG_ERROR("DefaultConditionFilter::filter: left is subquery");
   }
 
-  if (right_.is_attr) {
+  if (is_attr(right_)) {
     if (right_.nullable_) {
       // nullable需要多读4位判断是否为空
       right_isnull = *(int *)(rec.data + right_.attr_offset);
@@ -194,10 +337,12 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     } else {
         right_value = (char *)(rec.data + right_.attr_offset);
     }
-  } else {
+  } else if (is_value(right_)){
     right_isnull = right_.isnull_;
     if (!right_isnull)
       right_value = (char *)right_.value;
+  } else {
+    LOG_ERROR("DefaultConditionFilter::filter: right is subquery");
   }
 
   if (comp_op_ != IS_OP && comp_op_ != IS_NOT_OP) {
@@ -206,18 +351,30 @@ bool DefaultConditionFilter::filter(const Record &rec) const
   }
 
   if (comp_op_ == IS_NOT_OP) {
-    if (!left_isnull)
-      return true;
-    return false;
+    return !left_isnull;
   }
 
   if (comp_op_ == IS_OP) {
-    if (left_isnull)
-      return true;
-    return false;
+    return left_isnull;
   }
 
-  int cmp_result = 0;
+  using Set = std::unordered_set<TupleValue *, std::hash<TupleValue *>, TupleValueKeyEqualTo>;
+  if (comp_op_ == COND_IN || comp_op_ == NOT_IN) {
+    Subquery *subquery = right_.subquery;
+    AttrType set_type = subquery->result_type;
+    if (attr_type_ != set_type) {
+      LOG_ERROR("Where IN operator type mismatch: left = %d, right = %d", attr_type_, set_type);
+      return false;
+    }
+
+    bool found;
+    TupleValue *temp_tuple_value_from_record = TupleValue::from(attr_type_, left_value);
+    auto set = static_cast<Set *>(subquery->result);
+    found = (set->find(temp_tuple_value_from_record) != set->end());
+    delete temp_tuple_value_from_record;
+    return (comp_op_ == COND_IN) == found;
+  }
+
   switch (attr_type_) {
     case CHARS: {  // 字符串都是定长的，直接比较
       // 按照C字符串风格来定
@@ -251,6 +408,7 @@ bool DefaultConditionFilter::filter(const Record &rec) const
     break;
   }
 
+op_switch:
   switch (comp_op_) {
     case EQUAL_TO:
       return 0 == cmp_result;

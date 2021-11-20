@@ -446,10 +446,10 @@ bool do_unique_select(const _Value &value, Table *table, const char *field_name,
   relation_attr_init(&attr, table->name(), field_name);
   // condition
   Condition condition;
-  condition.left_attr = attr;
-  condition.left_is_attr = true;
-  condition.right_value = value;
-  condition.right_is_attr = false;
+  condition.left.attr = attr;
+  condition.left.type = COND_FIELD;
+  condition.right.value = value;
+  condition.right.type = COND_VALUE;
   condition.comp = EQUAL_TO;
 
   return do_custom_select(table, field_name, res_set, &condition);
@@ -1130,10 +1130,10 @@ Index *Table::find_index(const char *index_name) const {
 IndexScanner *Table::find_index_for_scan(const DefaultConditionFilter &filter) {
   const ConDesc *field_cond_desc = nullptr;
   const ConDesc *value_cond_desc = nullptr;
-  if (filter.left().is_attr && !filter.right().is_attr) {
+  if (is_attr(filter.left()) && !is_attr(filter.right())) {
     field_cond_desc = &filter.left();
     value_cond_desc = &filter.right();
-  } else if (filter.right().is_attr && !filter.left().is_attr) {
+  } else if (is_attr(filter.right()) && !is_attr(filter.left())) {
     field_cond_desc = &filter.right();
     value_cond_desc = &filter.left();
   }

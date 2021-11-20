@@ -23,6 +23,8 @@ See the Mulan PSL v2 for more details. */
 #include <sstream>
 #include <ctime>
 
+#include "sql/parser/parse_defs.h"
+
 class TupleValue {
 public:
   TupleValue() = default;
@@ -33,10 +35,25 @@ public:
   virtual TupleValue *clone() const = 0;
   virtual bool is_null() const = 0;
   virtual std::size_t hash() const = 0;
+  virtual AttrType type() const = 0;
+  static TupleValue *from(AttrType type, void *value);
 
 private:
 };
 
+template<>
+struct std::hash<TupleValue *> {
+  std::size_t operator()(const TupleValue *tuple) const noexcept {
+    return tuple->hash();
+  }
+};
+
+struct TupleValueKeyEqualTo {
+  bool operator()(const TupleValue *lhs, const TupleValue *rhs) const
+  {
+    return lhs->hash() == rhs->hash();
+  }
+};
 
 class NullValue : public TupleValue {
 public:
@@ -55,12 +72,17 @@ public:
 
     std::size_t hash() const override { return 0; }
 
+    AttrType type() const override { return NULLS; }
+
     bool is_null() const override{
       return true;
     }
 };
 
+class FloatValue;
+
 class IntValue : public TupleValue {
+  friend class FloatValue;
 public:
   explicit IntValue(int value) : value_(value) {
   }
@@ -83,6 +105,8 @@ public:
 
   std::size_t hash() const override { return value_; }
 
+  AttrType type() const override { return INTS; }
+
   int get_value() const { return value_; }
 
   bool is_null() const override{
@@ -95,6 +119,12 @@ private:
 class FloatValue : public TupleValue {
 public:
   explicit FloatValue(float value) : value_(value) {
+  }
+
+  static FloatValue *move_from(IntValue *int_value) {
+    FloatValue *ret = new FloatValue((float)int_value->value_);
+    delete int_value;
+    return ret;
   }
 
   void to_string(std::ostream &os) const override {
@@ -130,6 +160,8 @@ public:
   TupleValue *clone() const override { return new FloatValue(value_); }
 
   std::size_t hash() const override { return *reinterpret_cast<const std::size_t *>(&value_); }
+
+  AttrType type() const override { return FLOATS; }
 
   float get_value() const { return value_; }
   bool is_null() const override{
@@ -168,6 +200,8 @@ public:
 
   std::size_t hash() const override { return std::hash<std::string>()(value_); }
 
+  AttrType type() const override { return CHARS; }
+
 private:
   std::string value_;
 };
@@ -204,6 +238,8 @@ public:
   TupleValue *clone() const override { return new DateValue(value_); }
 
   std::size_t hash() const override { return value_; }
+
+  AttrType type() const override { return DATE; }
 
   /**
    * validate string format.
