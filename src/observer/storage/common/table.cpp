@@ -600,6 +600,11 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   return scan_record(trx, filter, limit, (void *)&adapter, scan_record_reader_adapter);
 }
 
+void connect_record(Record &r1, Record &r2, int offset, int len) {
+  r1.rid = r2.rid;
+  memcpy(r1.data + offset, r2.data, len);
+}
+
 RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *context, RC (*record_reader)(Record *record, void *context)) {
   if (nullptr == record_reader) {
     return RC::INVALID_ARGUMENT;
@@ -627,17 +632,30 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   }
 
   int record_count = 0;
-  Record record;
-  rc = scanner.get_first_record(&record);
-  for ( ; RC::SUCCESS == rc && record_count < limit; rc = scanner.get_next_record(&record)) {
-    if (trx == nullptr || trx->is_visible(this, &record)) {
-      rc = record_reader(&record, context);
+  int offset = 0;
+  int len = 4056;
+  int per_size = (table_meta_.record_size() + 4055) / 4056;
+  Record record{}, tmp;
+  record.data = static_cast<char *>(malloc(table_meta_.record_size() + 4));
+  rc = scanner.get_first_record(&tmp);
+  for ( ; RC::SUCCESS == rc && record_count < limit; rc = scanner.get_next_record(&tmp)) {
+    if (trx == nullptr || trx->is_visible(this, &tmp)) {
+      record_count++;
+      if (record_count % per_size == 0) {
+        rc = record_reader(&record, context);
+        memset(record.data, 0, table_meta_.record_size() + 4);
+        offset = 0;
+      } else {
+        connect_record(record, tmp, offset, table_meta_.record_size() - offset > len ? len : table_meta_.record_size() - offset);
+        offset += 4056;
+      }
       if (rc != RC::SUCCESS) {
         break;
       }
-      record_count++;
     }
   }
+  LOG_ERROR("read page count : %d\n", record_count);
+  free(record.data);
 
   if (RC::RECORD_EOF == rc) {
     rc = RC::SUCCESS;
