@@ -601,9 +601,15 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   return scan_record(trx, filter, limit, (void *)&adapter, scan_record_reader_adapter);
 }
 
+int first = 0;
 void connect_record(Record &r1, Record &r2, int offset, int len) {
   r1.rid = r2.rid;
-  memcpy(r1.data + offset, r2.data, len);
+  if (first == 0)
+    memcpy(r1.data, r2.data, len);
+  else {
+    memcpy(r1.data + offset, r2.data + 4, len - 4);
+  }
+  first++;
 }
 
 RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *context, RC (*record_reader)(Record *record, void *context)) {
@@ -642,8 +648,11 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   int offset = 0;
   int len = 4056;
   Record record{}, tmp;
-  if (per_size > 1)
-    record.data = static_cast<char *>(malloc(table_meta_.record_size() + 4));
+  if (per_size > 1) {
+    record.data = static_cast<char *>(malloc(table_meta_.record_size() + 4055));
+    memset(record.data, 0, sizeof(table_meta_.record_size() + 4055));
+  }
+
   rc = scanner.get_first_record(&tmp);
   for ( ; RC::SUCCESS == rc && record_count < limit; rc = scanner.get_next_record(&tmp)) {
     if (trx == nullptr || trx->is_visible(this, &tmp)) {
@@ -660,9 +669,9 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
           if (filter == nullptr || filter->filter(record)) {
               rc = record_reader(&record, context);
           }
-//          rc = record_reader(&record, context);
           memset(record.data, 0, table_meta_.record_size() + 4);
           offset = 0;
+          first = 0;
           rollback_rids.clear();
         }
       }
