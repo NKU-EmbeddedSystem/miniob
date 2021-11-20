@@ -607,7 +607,7 @@ void connect_record(Record &r1, Record &r2, int offset, int len) {
   if (first == 0)
     memcpy(r1.data, r2.data, len);
   else {
-    memcpy(r1.data + offset, r2.data + 4, len - 4);
+    memcpy(r1.data + offset, r2.data, len);
   }
   first++;
 }
