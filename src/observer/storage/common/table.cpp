@@ -915,33 +915,60 @@ RC Table::create_unique_index(Trx *trx, const char *index_name, const char *attr
 
 class RecordUpdater {
 public:
-    RecordUpdater(Table *table, Trx *trx, const char *attribute_name, const Value *value)
+  void split_record(Record *record, std::vector<Record*> &rec) {
+    int total = table_->table_meta_.record_size();
+    int count = 0;
+    int offset = 0;
+    while (total > 0) {
+      auto *new_record = static_cast<Record *>(malloc(sizeof(Record)));
+      new_record->data = static_cast<char *>(malloc(4056));
+      memset(new_record->data, 0, 4056);
+      memcpy(new_record->data, record->data + offset, total - offset > 4056 ? 4056 : total - offset);
+      new_record->rid = table_->rollback_rids[count];
+      total -= 4056;
+      count++;
+      rec.push_back(new_record);
+    }
+  }
+
+  RecordUpdater(Table *table, Trx *trx, const char *attribute_name, const Value *value)
       : table_(table), trx_(trx), attribute_name_(attribute_name), value_(value), updated_count_(0)
       { }
 
     RC update(Record *old_record) {
-      // prepare record to commit to update
-      char* new_value_buff;
-      RC rc = make_record(old_record, &new_value_buff);
-      if (rc != RC::SUCCESS) {
-        return rc;
+      std::vector<Record*> old_records;
+      if (table_->table_meta_.record_size() > 4056) {
+        split_record(old_record, old_records);
+      }
+      else {
+        old_records.emplace_back(old_record);
       }
 
-      Record new_record;
-      new_record.rid = old_record->rid;
-      new_record.data = new_value_buff;
+      for (Record *record : old_records) {
+        // prepare record to commit to update
+        char* new_value_buff;
+        RC rc = make_record(record, &new_value_buff);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
 
-      // perform update
-      rc = table_->update_record(trx_, old_record, &new_record);
-      if (rc == RC::SUCCESS) {
-        updated_count_++;
+        Record new_record{};
+        new_record.rid = record->rid;
+        new_record.data = new_value_buff;
+
+        // perform update
+        rc = table_->update_record(trx_, record, &new_record);
+        if (rc != RC::SUCCESS) {
+          return rc;
+        }
+        delete new_value_buff;
       }
 
-      delete new_value_buff;
-      return rc;
+      updated_count_++;
+      return RC::SUCCESS;
     }
 
-    int update_count() {
+    int update_count() const {
       return updated_count_;
     }
 
@@ -988,6 +1015,7 @@ RC Table::update_record(Trx *trx, Record *old_record, Record *new_record) {
                 new_record->rid.page_num, new_record->rid.slot_num, rc, strrc(rc));
       return rc;
     }
+    // split record
     rc = record_handler_->update_record(new_record);
   }
 
