@@ -213,7 +213,7 @@ RC QueryChecker::check_and_push_extra_in_comparator_condition(const Condition &c
   Condition &subquery_in_condition = subquery->conditions[subquery->condition_num];
 
   // set comparator
-  subquery_in_condition.comp = EQUAL_TO;
+  subquery_in_condition.comp = (condition.comp == COND_IN) ? EQUAL_TO : NOT_EQUAL;
 
   // set left side
   subquery_in_condition.left.type = COND_FIELD;
