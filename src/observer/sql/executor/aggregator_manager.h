@@ -21,6 +21,7 @@ public:
   RC create();
   void reset();
   std::vector<Aggregator *> &aggregators() { return aggregators_; }
+  static AttrType result_type(const AggDesc &agg_desc, const char *db);
 
 private:
   Aggregator *create_from(const AggDesc &agg_desc);

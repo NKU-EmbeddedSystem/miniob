@@ -218,6 +218,7 @@ public:
     tuples_.emplace_back(std::move(tuple));
   }
   void print(std::ostream &os) const;
+  const std::vector<Tuple> &tuples() const { return tuples_; }
 
 private:
   AggSchema schema_;

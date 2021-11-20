@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Longda on 2021/4/13.
 //
 
+#include <cstdlib>
 #include <string>
 #include <algorithm>
 
@@ -29,8 +30,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/executor/grouper.h"
 #include "sql/executor/query_checker.h"
 #include "sql/executor/single_relation_select_execution_node_creator.h"
+#include "sql/executor/subquery.h"
 #include "storage/default/default_handler.h"
-#include <cstdlib>
 
 using namespace common;
 
@@ -221,10 +222,10 @@ RC create_multiple_selector(const Selects &selects, std::vector<Condition> &mult
 bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &schema) {
   for (int i = 0; i < conditions.size(); ++i) {
     Condition &condition = conditions[i];
-    char *left_attr_name = condition.left_attr.attribute_name;
-    char *right_attr_name = condition.right_attr.attribute_name;
-    int left_idx = schema.index_of_field(condition.left_attr.relation_name, left_attr_name);
-    int right_idx = schema.index_of_field(condition.right_attr.relation_name, right_attr_name);
+    char *left_attr_name = condition.left.attr.attribute_name;
+    char *right_attr_name = condition.right.attr.attribute_name;
+    int left_idx = schema.index_of_field(condition.left.attr.relation_name, left_attr_name);
+    int right_idx = schema.index_of_field(condition.right.attr.relation_name, right_attr_name);
     if (left_idx == -1 || right_idx == -1) {
       LOG_ERROR("attribute name mismatch\n");
       return false;
@@ -235,7 +236,6 @@ bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &s
 
     bool left_isnull = left_val.is_null();
     bool right_isnull =right_val.is_null();
-
     auto comp_op_ = condition.comp;
     if (comp_op_ != IS_OP && comp_op_ != IS_NOT_OP) {
       if (left_isnull || right_isnull)
@@ -267,7 +267,7 @@ bool filter(Tuple &cur, std::vector<Condition> &conditions, const TupleSchema &s
           return false;
         break;
       case LESS_THAN:
-        if (cmp_result > 0)
+        if (cmp_result >= 0)
           return false;
         break;
       case GREAT_EQUAL:
@@ -361,8 +361,8 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
 
   // 找到左右连接所在的列
   Condition &condition = join_conditions.front();
-  int left_index = left.schema().index_of_field(condition.left_attr.relation_name, condition.left_attr.attribute_name);
-  int right_index = right.schema().index_of_field(condition.right_attr.relation_name, condition.right_attr.attribute_name);
+  int left_index = left.schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
+  int right_index = right.schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
 
   // hash
   for (int i = 0; i < left.size(); ++i) {
@@ -374,10 +374,17 @@ void hash_join(TupleSet &res, TupleSet &left, TupleSet &right,
     auto range = hash_map.equal_range(right.get(i).get(right_index).hash());
     for (auto it = range.first; it != range.second; ++it) {
       Tuple row;
-      row.raw_values().insert(row.raw_values().end(), left.get(it->second).values().begin(), left.get(it->second).values().end());
-      row.raw_values().insert(row.raw_values().end(), right.get(i).values().begin(), right.get(i).values().end());
+      row.raw_values().insert(
+              row.raw_values().end(),
+              left.get(it->second).values().begin(),
+              left.get(it->second).values().end());
+      row.raw_values().insert(
+              row.raw_values().end(),
+              right.get(i).values().begin(),
+              right.get(i).values().end());
       // 加个filter过滤后面的条件
-      if (filter(row, conditions, res.schema()))
+      bool result = filter(row, conditions, res.schema());
+      if (result)
         res.add(std::move(row));
     }
   }
@@ -391,8 +398,19 @@ TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> 
     right = &tuple_sets[i];
     std::vector<Condition> left_right_conditions;
     for (auto &condition : multiple_conditions) {
-      int left_exist = left->schema().index_of_field(condition.left_attr.relation_name, condition.left_attr.attribute_name);
-      int right_exist = right->schema().index_of_field(condition.right_attr.relation_name, condition.right_attr.attribute_name);
+      int left_exist = left->schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
+      int right_exist = right->schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
+      if (left_exist < 0 && right_exist < 0) {
+        int left_inv_exist = left->schema().index_of_field(condition.right.attr.relation_name, condition.right.attr.attribute_name);
+        int right_inv_exist = right->schema().index_of_field(condition.left.attr.relation_name, condition.left.attr.attribute_name);
+        if (left_inv_exist >= 0 && right_inv_exist >= 0) {
+          ConditionField tmp = condition.left;
+          condition.left = condition.right;
+          condition.right = tmp;
+          left_exist = 0;
+          right_exist = 0;
+        }
+      }
       if (left_exist >=0 && right_exist >= 0) {
         left_right_conditions.emplace_back(condition);
       }
@@ -404,11 +422,39 @@ TupleSet* join_tables(std::vector<TupleSet> &tuple_sets, std::vector<Condition> 
   return left;
 }
 
+void free_subquery_helper(Subquery *subquery) {
+  for (int i = 0; i < subquery->condition_num; i++) {
+    Condition &condition = subquery->conditions[i];
+    if (is_subquery(&condition.left)) {
+      free_subquery_helper(condition.left.subquery);
+    }
+    if (is_subquery(&condition.right)) {
+      free_subquery_helper(condition.right.subquery);
+    }
+  }
+
+  free(subquery);
+}
+
+void free_subquery(Selects &selects) {
+  free_condition_results(selects.conditions, selects.condition_num);
+
+  for (int i = 0; i < selects.condition_num; i++) {
+    Condition &condition = selects.conditions[i];
+    if (is_subquery(&condition.left)) {
+      free_subquery_helper(condition.left.subquery);
+    }
+    if (is_subquery(&condition.right)) {
+      free_subquery_helper(condition.right.subquery);
+    }
+  }
+}
 
 #define RETURN_FAILURE \
 do {                  \
   char response[] = "FAILURE\n"; \
   session_event->set_response(response); \
+  free_subquery(sql->sstr.selection); \
   return rc; \
 } while(0)
 
@@ -458,6 +504,38 @@ void push_orders(const Selects &selects, std::vector<Order> &orders) {
   }
 }
 
+void print_subquery(const std::string &prefix, const Condition conditions[], int num) {
+  for (int i = 0; i < num; i++) {
+    const Condition &cond = conditions[i];
+    printf("cond: %p\n", &cond);
+    std::cout << prefix << "left: " << cond.left.type << std::endl;
+    if (is_value(&cond.left)) {
+      std::cout << prefix << "[value]" << std::endl;
+    } else if (is_attr(&cond.left)) {
+      std::cout << prefix << "(" << ((cond.left.attr.relation_name ==
+              nullptr) ? "<nil>" : cond.left.attr.relation_name) << ", " << cond.left.attr.attribute_name << ")"<< std::endl;
+    } else {
+      print_subquery(prefix + "\t", cond.left.subquery->conditions, cond.left.subquery->condition_num);
+    }
+
+    std::cout << prefix << "right: " << cond.right.type << std::endl;
+    if (is_value(&cond.right)) {
+      std::cout << prefix << "[value]" << std::endl;
+    } else if (is_attr(&cond.right)) {
+      std::cout << prefix << "(" << ((cond.right.attr.relation_name ==
+      nullptr) ? "<nil>" : cond.right.attr.relation_name) << ", "<< cond.right.attr.attribute_name << ")" << std::endl;
+    } else {
+      printf("right: %p\n", cond.right.subquery);
+      print_subquery(prefix + "\t", cond.right.subquery->conditions, cond.right.subquery->condition_num);
+    }
+
+    std::cout << std::endl;
+  }
+}
+
+const char *global_db;
+Trx *global_trx;
+
 // 这里没有对输入的某些信息做合法性校验，比如查询的列名、where条件中的列名等，没有做必要的合法性校验
 // 需要补充上这一部分. 校验部分也可以放在resolve，不过跟execution放一起也没有关系
 RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_event) {
@@ -466,9 +544,18 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   Session *session = session_event->get_client()->session;
   Trx *trx = session->current_trx();
 
+  global_db = db;
+  global_trx = trx;
+
   const Selects &selects = sql->sstr.selection;
+//  print_subquery("", selects.conditions, selects.condition_num);
   QueryChecker query_checker(db, selects);
   rc = query_checker.check_fields();
+  if (rc != RC::SUCCESS) {
+    RETURN_FAILURE;
+  }
+
+  rc = evaluate_conditions(sql->sstr.selection.conditions, sql->sstr.selection.condition_num, db, trx);
   if (rc != RC::SUCCESS) {
     RETURN_FAILURE;
   }
@@ -588,6 +675,7 @@ RC ExecuteStage::do_select(const char *db, Query *sql, SessionEvent *session_eve
   }
   session_event->set_response(ss.str());
   end_trx_if_need(session, trx, true);
+  free_subquery(sql->sstr.selection);
   return rc;
 }
 
@@ -598,8 +686,9 @@ RC create_multiple_selector(const Selects &selects, std::vector<Condition> &mult
   for (size_t i = 0; i < selects.condition_num; i++) {
     const Condition &condition = selects.conditions[i];
     // 左右都是表名而且不一样
-    if (condition.left_is_attr == 1 && condition.right_is_attr == 1 &&
-      strcmp(condition.left_attr.relation_name, condition.right_attr.relation_name) != 0) {
+    if (is_attr(&condition.left) && !condition.left.refers_outer
+      && is_attr(&condition.right) && !condition.right.refers_outer
+      && strcmp(condition.left.attr.relation_name, condition.right.attr.relation_name) != 0) {
       multiple_conditions.push_back(condition);
     }
   }

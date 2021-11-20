@@ -11,6 +11,20 @@ See the Mulan PSL v2 for more details. */
 #include <ctime>
 
 #include "value.h"
+#include "common/log/log.h"
+
+TupleValue *TupleValue::from(AttrType type, void *value) {
+  typedef enum { UNDEFINED, CHARS, INTS, DATE, FLOATS, TEXTS, NULLS} AttrType;
+  switch (type) {
+    case CHARS: return new StringValue(static_cast<char *>(value));
+    case INTS: return new IntValue(*static_cast<int *>(value));
+    case DATE: return new DateValue(*static_cast<date_t *>(value));
+    case FLOATS: return new FloatValue(*static_cast<float *>(value));
+    default:
+      LOG_ERROR("TupleValue factory fail to create from AttrType: %d", type);
+      return nullptr;
+  }
+}
 
 bool DateValue::validate_data_format(const char *value, tm *t) {
   tm dumpy;

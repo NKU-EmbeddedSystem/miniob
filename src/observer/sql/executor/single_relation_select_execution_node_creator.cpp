@@ -69,8 +69,10 @@ RC SingleRelationSelectExeNodeCreator::create_condition_filters(
   RC rc;
 
   for (int i = 0; i < selects_.condition_num; i++) {
-    const auto &condition = selects_.conditions[i];
-    if (condition_refers_single_table(condition, table_name)) {
+    auto &condition = const_cast<Condition &>(selects_.conditions[i]);
+    bool single = condition_refers_single_table(condition, table_name);
+
+    if (single) {
       rc = push_single_table_filter(condition, table, condition_filters);
       if (rc != RC::SUCCESS) {
         return rc;
@@ -89,14 +91,14 @@ RC SingleRelationSelectExeNodeCreator::create_condition_filters(
 bool SingleRelationSelectExeNodeCreator::condition_refers_single_table(
         const Condition &condition,
         const char *table_name) {
-  return (condition.left_is_attr == 0 && condition.right_is_attr == 0) // 两边都是值
-         || (condition.left_is_attr == 1 && condition.right_is_attr == 0
-             && match_table(condition.left_attr.relation_name, table_name)) // 左边是属性右边是值
-         || (condition.left_is_attr == 0 && condition.right_is_attr == 1
-             && match_table(condition.right_attr.relation_name, table_name)) // 左边是值，右边是属性名
-         || (condition.left_is_attr == 1 && condition.right_is_attr == 1
-             && match_table(condition.left_attr.relation_name, table_name)
-             && match_table(condition.right_attr.relation_name, table_name)); // 左右都是属性名，并且表名都符合
+  return (!is_attr(&condition.left) && !is_attr(&condition.right)) // 两边都是不是属性
+         || (is_attr(&condition.left) && !is_attr(&condition.right)
+             && (match_table(condition.left.attr.relation_name, table_name) || condition.left.refers_outer)) // 左边是属性右边不是
+         || (!is_attr(&condition.left) && is_attr(&condition.right)
+             && (match_table(condition.right.attr.relation_name, table_name) || condition.right.refers_outer)) // 左边不是属性，右边是属性
+         || (is_attr(&condition.left) && is_attr(&condition.right)
+             && (match_table(condition.left.attr.relation_name, table_name) || condition.left.refers_outer)
+             && (match_table(condition.right.attr.relation_name, table_name) || condition.right.refers_outer)); // 左右都是属性，并且表名都符合
 }
 
 bool SingleRelationSelectExeNodeCreator::match_table(
@@ -125,8 +127,8 @@ static RC push_single_table_filter(const Condition &condition, const Table *tabl
 }
 
 static bool condition_refers_multiple_tables(const Condition &condition) {
-  return condition.left_is_attr == 1 && condition.right_is_attr == 1
-         && strcmp(condition.left_attr.relation_name, condition.right_attr.relation_name) != 0;
+  return is_attr(&condition.left) && is_attr(&condition.right)
+         && strcmp(condition.left.attr.relation_name, condition.right.attr.relation_name) != 0;
 }
 
 RC SingleRelationSelectExeNodeCreator::condition_filter_extend_tuple_schema(
@@ -134,13 +136,13 @@ RC SingleRelationSelectExeNodeCreator::condition_filter_extend_tuple_schema(
         const char *table_name,
         TupleSchema &schema,
         int &extra_count) {
-  char *left_attr_name = condition.left_attr.attribute_name;
-  char *left_table_name = condition.left_attr.relation_name;
-  char *right_attr_name = condition.right_attr.attribute_name;
-  char *right_table_name = condition.right_attr.relation_name;
+  char *left_attr_name = condition.left.attr.attribute_name;
+  char *left_table_name = condition.left.attr.relation_name;
+  char *right_attr_name = condition.right.attr.attribute_name;
+  char *right_table_name = condition.right.attr.relation_name;
   const Table *left_table = DefaultHandler::get_default().find_table(db_, left_table_name);
   const Table *right_table = DefaultHandler::get_default().find_table(db_, right_table_name);
-  int left_idx = schema.index_of_field(condition.left_attr.relation_name, left_attr_name);
+  int left_idx = schema.index_of_field(condition.left.attr.relation_name, left_attr_name);
 
   // 增加对应的列，不过得在自己这个表里才加
   // 如果类型不匹配返回错误 或者增加对应的列
@@ -156,7 +158,7 @@ RC SingleRelationSelectExeNodeCreator::condition_filter_extend_tuple_schema(
     }
   }
 
-  int right_idx = schema.index_of_field(condition.right_attr.relation_name, right_attr_name);
+  int right_idx = schema.index_of_field(condition.right.attr.relation_name, right_attr_name);
   if (right_idx == -1) {
     if (strcmp(right_table_name, table_name) == 0) {
       RC rc = schema_add_field(right_table, right_attr_name, schema);
@@ -291,8 +293,8 @@ RC SingleRelationSelectExeNodeCreator::condition_filter_will_extend_tuple_schema
 
   for (int i = 0; i < selects_.condition_num; i++) {
     const auto &condition = selects_.conditions[i];
-    if ((condition.left_is_attr && relattr_refers_table(condition.left_attr, table_name))
-        || (condition.right_is_attr && relattr_refers_table(condition.right_attr, table_name))) {
+    if ((is_attr(&condition.left) && relattr_refers_table(condition.left.attr, table_name))
+        || (is_attr(&condition.right) && relattr_refers_table(condition.right.attr, table_name))) {
       // do not extend schema here, because latter condition filter will itself extend it
       return RC::SUCCESS;
     }

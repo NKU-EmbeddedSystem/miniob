@@ -5,10 +5,10 @@
 #ifndef MINIDB_LIST_H
 #define MINIDB_LIST_H
 
-struct list_head {
-  list_head *prev;
-  list_head *next;
-};
+typedef struct __list_head {
+  struct __list_head *prev;
+  struct __list_head *next;
+} list_head;
 
 inline void list_init(list_head *list) {
   list->prev = list->next = list;
@@ -34,6 +34,10 @@ inline void list_delete(list_head *element) {
   prev->next = next;
   next->prev = prev;
   element->prev = element->next = element;
+}
+
+inline int list_empty(list_head *list) {
+  return (list->next == list) && (list->prev == list);
 }
 
 typedef unsigned long ptr_t;

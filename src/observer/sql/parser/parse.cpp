@@ -89,34 +89,74 @@ void value_destroy(Value *value) {
   value->data = nullptr;
 }
 
-void condition_init(Condition *condition, CompOp comp, 
-                    int left_is_attr, RelAttr *left_attr, Value *left_value,
-                    int right_is_attr, RelAttr *right_attr, Value *right_value) {
+ConditionField *condition_field_init_value(Value *value) {
+  ConditionField *condition_field = (ConditionField *)malloc(sizeof(ConditionField));
+  memset(condition_field, 0, sizeof(ConditionField));
+  condition_field->type = COND_VALUE;
+  condition_field->value = *value;
+  return condition_field;
+}
+
+ConditionField *condition_field_init_attr(char *relation_name, char *attribute_name) {
+  ConditionField *condition_field = (ConditionField *)malloc(sizeof(ConditionField));
+  memset(condition_field, 0, sizeof(ConditionField));
+  condition_field->type = COND_FIELD;
+  condition_field->attr.relation_name = relation_name == nullptr ? nullptr : strdup(relation_name);
+  condition_field->attr.attribute_name = strdup(attribute_name);
+  return condition_field;
+}
+
+ConditionField *condition_field_init_subquery(Subquery *subquery) {
+  ConditionField *condition_field = (ConditionField *)malloc(sizeof(ConditionField));
+  memset(condition_field, 0, sizeof(ConditionField));
+  condition_field->type = COND_SUBQUERY;
+  condition_field->subquery = subquery;
+  return condition_field;
+}
+
+void subquery_set_attribute(Subquery *subquery, RelAttr *rel_attr) {
+  subquery->is_agg = false;
+  subquery->attribute = *rel_attr;
+}
+void subquery_set_agg(Subquery *subquery, AggDesc *agg_desc) {
+  subquery->is_agg = true;
+  subquery->agg = *agg_desc;
+}
+void subquery_append_relation(Subquery *subquery, const char *relation_name) {
+  if (subquery->relation_num >= MAX_NUM) {
+    LOG_ERROR("to much arguments\n");
+    return;
+  }
+  subquery->relations[subquery->relation_num++] = strdup(relation_name);
+}
+void subquery_append_condition(Subquery *subquery, Condition *condition) {
+  if (subquery->condition_num >= MAX_NUM) {
+    LOG_ERROR("to much arguments\n");
+    return;
+  }
+  subquery->conditions[subquery->condition_num++] = *condition;
+}
+
+void condition_init(Condition *condition, ConditionField *left, ConditionField *right, CompOp comp) {
+  condition->left = *left;
+  condition->right = *right;
   condition->comp = comp;
-  condition->left_is_attr = left_is_attr;
-  if (left_is_attr) {
-    condition->left_attr = *left_attr;
-  } else {
-    condition->left_value = *left_value;
+
+  delete left;
+  delete right;
+}
+
+void condition_destroy(Condition *condition) {
+  if (is_attr(&condition->left)) {
+    relation_attr_destroy(&condition->left.attr);
+  } else if (is_value(&condition->left)){
+    value_destroy(&condition->left.value);
   }
 
-  condition->right_is_attr = right_is_attr;
-  if (right_is_attr) {
-    condition->right_attr = *right_attr;
-  } else {
-    condition->right_value = *right_value;
-  }
-}
-void condition_destroy(Condition *condition) {
-  if (condition->left_is_attr) {
-    relation_attr_destroy(&condition->left_attr);
-  } else {
-    value_destroy(&condition->left_value);
-  }
-  if (condition->right_is_attr) {
-    relation_attr_destroy(&condition->right_attr);
-  } else {
-    value_destroy(&condition->right_value);
+  if (is_attr(&condition->right)) {
+    relation_attr_destroy(&condition->right.attr);
+  } else if (is_value(&condition->right)){
+    value_destroy(&condition->right.value);
   }
 }
 
@@ -135,14 +175,37 @@ void attr_info_destroy(AttrInfo *attr_info) {
 void agg_desc_init_string(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, char *relation_name, char *attribute_name) {
   agg_desc->agg_type = agg_type;
   agg_desc->agg_operand_type = agg_operand_type;
-  agg_desc->agg_attr.relation_name = relation_name;
-  agg_desc->agg_attr.attribute_name = attribute_name;
+  agg_desc->agg_attr.relation_name = relation_name == nullptr ? nullptr : strdup(relation_name);
+  agg_desc->agg_attr.attribute_name = strdup(attribute_name);
 }
 
 void agg_desc_init_number(AggDesc *agg_desc, AggType agg_type, AggOperandType agg_operand_type, int number) {
   agg_desc->agg_type = agg_type;
   agg_desc->agg_operand_type = agg_operand_type;
   agg_desc->number = number;
+}
+
+const char *comp_op_name(CompOp comp) {
+  static const char *comp_op_names[] = {
+          [EQUAL_TO] = "=",
+          [LESS_EQUAL] = "<=",
+          [NOT_EQUAL] = "<>",
+          [LESS_THAN] = "<",
+          [GREAT_EQUAL] = ">=",
+          [GREAT_THAN] = ">",
+          [NO_OP] = "nop",
+          [IS_OP] = "is",
+          [IS_NOT_OP] = "is not",
+          [COND_IN] = "in",
+          [NOT_IN] = "not in",
+  };
+
+  if (comp < EQUAL_TO || comp > NOT_IN) {
+    LOG_ERROR("Unsupported aggregation type: %d", comp);
+    return nullptr;
+  }
+
+  return comp_op_names[comp];
 }
 
 const char *agg_type_name(AggType agg_type) {
@@ -205,9 +268,17 @@ void selects_append_attribute(Selects *selects, RelAttr *rel_attr) {
   selects->attributes[selects->attr_num++] = *rel_attr;
 }
 void selects_append_relation(Selects *selects, const char *relation_name) {
+  if (selects->relation_num >= MAX_NUM) {
+    LOG_ERROR("to much arguments\n");
+    return;
+  }
   selects->relations[selects->relation_num++] = strdup(relation_name);
 }
 void selects_append_agg(Selects *selects, AggDesc *agg_desc) {
+  if (selects->agg_num >= MAX_NUM) {
+    LOG_ERROR("to much arguments\n");
+    return;
+  }
   selects->aggs[selects->agg_num++] = *agg_desc;
 }
 void selects_append_conditions(Selects *selects, Condition conditions[], size_t condition_num) {
