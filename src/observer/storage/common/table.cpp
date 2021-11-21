@@ -603,7 +603,6 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
 
 int first = 0;
 void connect_record(Record &r1, Record &r2, int offset, int len) {
-  r1.rid = r2.rid;
   if (first == 0)
     memcpy(r1.data, r2.data, len);
   else {
@@ -647,10 +646,13 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   int record_count = 0;
   int offset = 0;
   int len = 4056;
-  Record record{}, tmp;
+  Record *record = nullptr;
+  std::vector<Record *> need_to_free_records;
+  Record tmp{};
   if (per_size > 1) {
-    record.data = static_cast<char *>(malloc(table_meta_.record_size() + 4055));
-    memset(record.data, 0, table_meta_.record_size() + 4055);
+    record = new Record{};
+    record->data = static_cast<char *>(malloc(table_meta_.record_size() + 4055));
+    memset(record->data, 0, table_meta_.record_size() + 4055);
   }
 
   rc = scanner.get_first_record(&tmp);
@@ -663,13 +665,16 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
       else {
         RID rid = tmp.rid;
         rollback_rids.emplace_back(rid);
-        connect_record(record, tmp, offset, table_meta_.record_size() - offset > len ? len : table_meta_.record_size() - offset);
+        connect_record(*record, tmp, offset, table_meta_.record_size() - offset > len ? len : table_meta_.record_size() - offset);
         offset += 4056;
         if (record_count % per_size == 0) {
-          if (filter == nullptr || filter->filter(record)) {
-              rc = record_reader(&record, context);
+          if (filter == nullptr || filter->filter(*record)) {
+              rc = record_reader(record, context);
           }
-          memset(record.data, 0, table_meta_.record_size() + 4);
+          need_to_free_records.emplace_back(record);
+          record = new Record{};
+          record->data = static_cast<char *>(malloc(table_meta_.record_size() + 4055));
+          memset(record->data, 0, table_meta_.record_size() + 4055);
           offset = 0;
           first = 0;
           rollback_rids.clear();
@@ -681,8 +686,12 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
     }
   }
   LOG_ERROR("read page count : %d\n", record_count);
-  if (per_size > 1)
-    free(record.data);
+  if (per_size > 1) {
+    for (Record *del : need_to_free_records) {
+      free(del->data);
+      delete del;
+    }
+  }
 
   if (RC::RECORD_EOF == rc) {
     rc = RC::SUCCESS;
