@@ -650,7 +650,7 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
   Record record{}, tmp;
   if (per_size > 1) {
     record.data = static_cast<char *>(malloc(table_meta_.record_size() + 4055));
-    memset(record.data, 0, sizeof(table_meta_.record_size() + 4055));
+    memset(record.data, 0, table_meta_.record_size() + 4055);
   }
 
   rc = scanner.get_first_record(&tmp);
