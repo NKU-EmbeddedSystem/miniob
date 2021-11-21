@@ -326,7 +326,6 @@ RC Table::insert_record(Trx *trx, Record *record) {
 }
 
 RC Table::insert_record(Trx *trx, int value_num, const Value *values) {
-  trx = nullptr;
   if (value_num <= 0 || nullptr == values ) {
     LOG_ERROR("Invalid argument. value num=%d, values=%p", value_num, values);
     return RC::INVALID_ARGUMENT;
@@ -613,7 +612,6 @@ void connect_record(Record &r1, Record &r2, int offset, int len) {
 }
 
 RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *context, RC (*record_reader)(Record *record, void *context)) {
-  trx = nullptr;
   if (nullptr == record_reader) {
     return RC::INVALID_ARGUMENT;
   }
