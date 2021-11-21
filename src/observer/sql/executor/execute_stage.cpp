@@ -209,6 +209,8 @@ void ExecuteStage::handle_request(common::StageEvent *event) {
 }
 
 void end_trx_if_need(Session *session, Trx *trx, bool all_right) {
+  if (trx == nullptr)
+    return;
   if (!session->is_trx_multi_operation_mode()) {
     if (all_right) {
       trx->commit();
