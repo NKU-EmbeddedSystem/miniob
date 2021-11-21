@@ -686,12 +686,12 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
     }
   }
   LOG_ERROR("read page count : %d\n", record_count);
-  if (per_size > 1) {
-    for (Record *del : need_to_free_records) {
-      free(del->data);
-      delete del;
-    }
-  }
+//  if (per_size > 1) {
+//    for (Record *del : need_to_free_records) {
+//      free(del->data);
+//      delete del;
+//    }
+//  }
 
   if (RC::RECORD_EOF == rc) {
     rc = RC::SUCCESS;
