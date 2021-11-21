@@ -141,6 +141,10 @@ RC RecordPageHandler::deinit() {
 }
 
 RC RecordPageHandler::insert_record(const char *data, RID *rid) {
+  return insert_record(data, rid, 0);
+}
+
+RC RecordPageHandler::insert_record(const char *data, RID *rid, int len) {
 
   if (page_header_->record_num == page_header_->record_capacity) {
     LOG_ERROR("record_num : %d, capacity : %d\n", page_header_->record_num, page_header_->record_capacity);
@@ -158,7 +162,10 @@ RC RecordPageHandler::insert_record(const char *data, RID *rid) {
   // assert index < page_header_->record_capacity
   char *record_data = page_handle_.frame->page.data +
       page_header_->first_record_offset + (index * page_header_->record_size);
-  memcpy(record_data, data, page_header_->record_real_size);
+  if (len == 0)
+    memcpy(record_data, data, page_header_->record_real_size);
+  else
+    memcpy(record_data, data, len);
 
   RC rc = disk_buffer_pool_->mark_dirty(&page_handle_);
   if (rc != RC::SUCCESS) {
@@ -351,7 +358,8 @@ void RecordFileHandler::close() {
   }
 }
 
-RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid) {
+RC RecordFileHandler::insert_record(const char *old_data, int record_size, RID *rid) {
+  char *data = const_cast<char *>(old_data);
   int res = record_size;
   int cur = 0;
   int fixed_size = record_page_handler_.get_page_size() - page_fix_size() - 16;
@@ -429,7 +437,7 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
     if (cur == 0)
       ret = record_page_handler_.insert_record(data, rid);
     else
-      ret = record_page_handler_.insert_record(data + cur - 4, rid);
+      ret = record_page_handler_.insert_record(data + cur - 4, rid, res + 4);
 
     if (ret != RC::SUCCESS)
       return ret;
