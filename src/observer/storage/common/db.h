@@ -47,6 +47,9 @@ public:
   void all_tables(std::vector<std::string> &table_names) const;
 
   RC sync();
+
+  void reopen_table(const char *table_name);
+
 private:
   RC open_all_tables();
 

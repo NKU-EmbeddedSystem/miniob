@@ -172,8 +172,13 @@ RC DefaultHandler::insert_record(Trx *trx, const char *dbname, const char *relat
   if (nullptr == table) {
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
-
-  return table->insert_record(trx, value_num, values);
+  RC rc = table->insert_record(trx, value_num, values);
+//  if (table->table_meta().record_size() > 4056) {
+//    auto name = table->name();
+//    auto *db = find_db(dbname);
+//    db->reopen_table(name);
+//  }
+  return rc;
 }
 RC DefaultHandler::delete_record(Trx *trx, const char *dbname, const char *relation_name,
                                  int condition_num, const Condition *conditions, int *deleted_count) {
