@@ -53,6 +53,7 @@ public:
   RC init_empty_page(DiskBufferPool &buffer_pool, int file_id, PageNum page_num, int record_size);
   RC deinit();
 
+  RC insert_record(const char *data, RID *rid, int len);
   RC insert_record(const char *data, RID *rid);
   RC update_record(const Record *rec);
 
