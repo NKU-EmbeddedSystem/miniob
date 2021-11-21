@@ -150,6 +150,7 @@ void ExecuteStage::handle_request(common::StageEvent *event) {
       }
 
       default_storage_stage_->handle_event(storage_event);
+//      DefaultHandler::get_default().sync();
     }
     break;
     case SCF_SYNC: {

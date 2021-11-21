@@ -109,8 +109,9 @@ private:
 private:
   Index *find_index(const char *index_name) const;
 
-private:
+public:
   std::string             base_dir_;
+private:
   TableMeta               table_meta_;
   DiskBufferPool *        data_buffer_pool_; /// 数据文件关联的buffer pool
   int                     file_id_;

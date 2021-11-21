@@ -114,6 +114,16 @@ Table *Db::find_table(const char *table_name) const {
   return nullptr;
 }
 
+void Db::reopen_table(const char *table_name) {
+  if (opened_tables_.count(table_name) > 0) {
+    opened_tables_[table_name]->sync();
+    delete opened_tables_[table_name];
+    Table *table = new Table();
+    RC rc = table->open(table_name, path_.c_str());
+    opened_tables_[table_name] = table;
+  }
+}
+
 RC Db::open_all_tables() {
   std::vector<std::string> table_meta_files;
   int ret = common::list_file(path_.c_str(), TABLE_META_FILE_PATTERN, table_meta_files);
