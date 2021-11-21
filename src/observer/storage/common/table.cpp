@@ -681,8 +681,8 @@ RC Table::scan_record(Trx *trx, ConditionFilter *filter, int limit, void *contex
     }
   }
   LOG_ERROR("read page count : %d\n", record_count);
-//  if (per_size > 1)
-//    free(record.data);
+  if (per_size > 1)
+    free(record.data);
 
   if (RC::RECORD_EOF == rc) {
     rc = RC::SUCCESS;
